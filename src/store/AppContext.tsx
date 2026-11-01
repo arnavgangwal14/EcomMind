@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from 'sonner'
 import { SEED_NOTIFICATIONS, type ActivityEvent, type AppNotification, type Product } from '@/data/demo'
 import { api, ApiError, type ApiBusiness, type ApiEvent, type ApiProduct, type MeResponse } from '@/lib/api'
+import { getUserProducts } from '@/lib/clientImport'
 import { useApiQuery, useDataStore } from '@/store/DataStore'
 import { useCommerce, type CommerceState } from '@/store/commerce'
 
@@ -87,7 +88,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const productsQ = useApiQuery<{ products: ApiProduct[] }>(signedIn && me?.business ? '/api/products' : null, ['products'])
   const eventsQ = useApiQuery<{ items: ApiEvent[] }>(signedIn && me?.business ? '/api/activity/events?pageSize=200' : null, ['activity'])
   const catalog = useMemo<Product[]>(() => {
-    return (productsQ.data?.products ?? []).map((p) => ({
+    const list = productsQ.data?.products && productsQ.data.products.length > 0 ? productsQ.data.products : getUserProducts()
+    return list.map((p) => ({
       sku: p.sku, name: p.name, category: p.category, price: p.price / 100, cost: p.cost / 100, stock: p.stock,
       avgDailySales: p.avgDailySales, returnRate: p.returnRate, icon: p.icon, paused: p.paused,
     }))

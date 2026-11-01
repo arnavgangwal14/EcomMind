@@ -7,6 +7,7 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 import { useApp } from '@/store/AppContext'
 import { useApiQuery, useDataStore } from '@/store/DataStore'
 import { api, ApiError, type ApiProduct, type ApiSupplier } from '@/lib/api'
+import { getUserProducts } from '@/lib/clientImport'
 import { cx, downloadCSV, formatNum, formatPaise, shortDate } from '@/lib/format'
 import { ChartEmpty, ChartSkeleton, EmptyState, PageHeader, PanelError, ProductIcon, StatusBadge, stockTone } from '@/components/common'
 import { tooltipStyle } from '@/lib/chartTheme'
@@ -37,7 +38,11 @@ export default function Inventory() {
   const [draft, setDraft] = useState({ name: '', sku: '', category: 'Electronics', price: '', cost: '', stock: '', avgDaily: '' })
   const navigate = useNavigate()
 
-  const allProducts = useMemo(() => productsQ.data?.products ?? [], [productsQ.data])
+  const allProducts = useMemo(() => {
+    const fromQ = productsQ.data?.products
+    if (Array.isArray(fromQ) && fromQ.length > 0) return fromQ
+    return getUserProducts()
+  }, [productsQ.data])
   const CATEGORIES = useMemo(() => ['All', ...new Set([...allProducts.map((p) => p.category), ...BASE_CATEGORIES])], [allProducts])
 
   const filtered = useMemo(() => allProducts.filter((p) => {

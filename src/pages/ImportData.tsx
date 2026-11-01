@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRight, Check, Download, FileSpreadsheet, FileWarnin
 import { toast } from 'sonner'
 import { useDataStore, useApiQuery } from '@/store/DataStore'
 import { summarize, uploadImport, type ImportBatch } from '@/lib/imports'
+import { getStoredImportBatches } from '@/lib/clientImport'
 import { downloadSampleRows } from './importSampleData'
 import { cx, downloadCSV, formatDateTime, formatNum } from '@/lib/format'
 import { PageHeader, PanelError, StatusBadge } from '@/components/common'
@@ -34,8 +35,13 @@ const SLOTS: SlotDef[] = [
 export default function ImportData() {
   const store = useDataStore()
   const navigate = useNavigate()
+  const [localBatches, setLocalBatches] = useState<ImportBatch[]>(() => getStoredImportBatches())
   const historyQ = useApiQuery<{ batches: ImportBatch[] }>('/api/imports?limit=100', ['products'])
-  const history = useMemo(() => historyQ.data?.batches ?? [], [historyQ.data])
+  const history = useMemo(() => {
+    const fromQ = historyQ.data?.batches
+    if (Array.isArray(fromQ) && fromQ.length > 0) return fromQ
+    return localBatches
+  }, [historyQ.data, localBatches])
   const [target, setTarget] = useState<DatasetKey>('products')
   const [dragOver, setDragOver] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -51,6 +57,9 @@ export default function ImportData() {
 
   const afterImport = (batches: ImportBatch[]) => {
     setResults((prev) => [...batches, ...prev].slice(0, 12))
+    const freshStored = getStoredImportBatches()
+    setLocalBatches(freshStored)
+    store.setData('/api/imports?limit=100', { batches: freshStored })
     store.invalidate('products', 'analytics', 'orders', 'mandate', 'suppliers', 'activity')
     historyQ.reload()
     for (const b of batches) {

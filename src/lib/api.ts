@@ -78,17 +78,16 @@ export async function api<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   let data: unknown = undefined
   try { data = text ? JSON.parse(text) : undefined } catch { /* non-JSON body */ }
 
-  if (!res.ok) {
-    // If static hosting returns 404, 405 Method Not Allowed, or HTML error page on API route
-    if (
-      res.status === 404 ||
-      res.status === 405 ||
-      (typeof text === 'string' && (text.includes('<!DOCTYPE html>') || text.includes('<html')))
-    ) {
-      const fallback = getMockApiResponse<T>(path, opts)
-      if (fallback !== undefined) return fallback
-    }
+  const isHtml = typeof text === 'string' && (text.includes('<!DOCTYPE') || text.includes('<html') || text.includes('__vite'))
+  const isInvalidApiData = data === undefined && res.status !== 204
 
+  // If the server returned an error, or if static hosting (e.g. Vercel) returned HTML/non-JSON on an API route:
+  if (!res.ok || isHtml || isInvalidApiData) {
+    const fallback = getMockApiResponse<T>(path, opts)
+    if (fallback !== undefined) return fallback
+  }
+
+  if (!res.ok) {
     // Session ended elsewhere (expired, logged out in another tab): tell the app.
     if (res.status === 401 && !path.startsWith('/api/auth/') && !path.startsWith('/api/places/')) window.dispatchEvent(new Event('ecommind:unauthorized'))
     const d = data as { error?: { code?: string; message?: string; field?: string; details?: unknown }; detail?: string } | undefined
