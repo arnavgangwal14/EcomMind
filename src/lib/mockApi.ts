@@ -6,8 +6,9 @@
  * allowing sign-in, demo explore, analytics, inventory, and agent simulations to run seamlessly.
  */
 
-import { PRODUCTS, SUPPLIERS, LOGISTICS_QUOTES, SERVICE_AGENTS, SEED_ACTIVITY } from '@/data/demo'
+import { SUPPLIERS, LOGISTICS_QUOTES, SERVICE_AGENTS, SEED_ACTIVITY } from '@/data/demo'
 import type { MeResponse, ApiProduct, ApiMandate, ApiEvent } from './api'
+import { getUserProducts, saveUserProducts, getStoredImportBatches } from './clientImport'
 
 export function getMockApiResponse<T>(path: string, opts: { method?: string; body?: unknown } = {}): T | undefined {
   // Normalize path without query params
@@ -154,31 +155,48 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
 
   // 2. Catalog & Products
   if (cleanPath === '/api/products') {
-    const apiProducts: ApiProduct[] = PRODUCTS.map((p) => ({
-      sku: p.sku,
-      name: p.name,
-      category: p.category,
-      price: p.price * 100, // paise
-      cost: p.cost * 100,
-      stock: p.stock,
-      avgDailySales: p.avgDailySales,
-      returnRate: p.returnRate,
-      icon: p.icon,
-      paused: !!p.paused,
-      coverageDays: p.avgDailySales > 0 ? Math.round((p.stock / p.avgDailySales) * 10) / 10 : 999,
-      status: p.stock === 0 ? 'Out of Stock' : p.stock < 15 ? 'Critical' : p.stock < 30 ? 'Low Stock' : 'In Stock',
-      marginPct: Math.round(((p.price - p.cost) / p.price) * 1000) / 10,
-    }))
-    return { products: apiProducts } as T
+    if (opts.method === 'POST' || (opts.body && opts.method !== 'GET')) {
+      const b = (opts.body as Partial<ApiProduct>) || {}
+      const current = getUserProducts()
+      const price = b.price || 10000
+      const cost = b.cost || Math.round(price * 0.6)
+      const stock = b.stock ?? 0
+      const avgDailySales = b.avgDailySales || 2.5
+      const sku = (b.sku || `SKU-${Date.now()}`).toUpperCase().trim()
+      const newProduct: ApiProduct = {
+        sku,
+        name: b.name || 'New Product',
+        category: b.category || 'General',
+        price,
+        cost,
+        stock,
+        avgDailySales,
+        returnRate: b.returnRate ?? 0.05,
+        icon: b.icon || 'package',
+        paused: !!b.paused,
+        coverageDays: avgDailySales > 0 ? Math.round((stock / avgDailySales) * 10) / 10 : 999,
+        status: stock === 0 ? 'Out of Stock' : stock < 15 ? 'Critical' : stock < 30 ? 'Low Stock' : 'In Stock',
+        marginPct: price > 0 ? Math.round(((price - cost) / price) * 1000) / 10 : 0,
+      }
+      const existingIdx = current.findIndex((p) => p.sku === sku)
+      if (existingIdx >= 0) current[existingIdx] = newProduct
+      else current.unshift(newProduct)
+      saveUserProducts(current)
+      return { product: newProduct } as T
+    }
+    return { products: getUserProducts() } as T
   }
 
   // 3. Analytics
   if (cleanPath === '/api/analytics/summary') {
+    const products = getUserProducts()
+    const totalStock = products.reduce((sum, p) => sum + p.stock, 0)
+    const inventoryValuation = products.reduce((sum, p) => sum + p.stock * p.cost, 0)
     return {
-      revenue: 148240000,
-      profit: 46200000,
+      revenue: Math.max(148240000, inventoryValuation * 2),
+      profit: Math.round(Math.max(148240000, inventoryValuation * 2) * 0.32),
       margin: 34.2,
-      orders: 1420,
+      orders: Math.max(1420, totalStock * 3),
       ordersTrend: 12.4,
       revenueTrend: 18.2,
       avgOrderValue: 104400,
@@ -205,17 +223,17 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
   }
 
   if (cleanPath === '/api/analytics/inventory') {
-    const products = PRODUCTS.map((p) => ({
+    const products = getUserProducts().map((p) => ({
       sku: p.sku,
       name: p.name,
       stock: p.stock,
-      cost: p.cost * 100,
-      price: p.price * 100,
-      valuation: p.stock * p.cost * 100,
-      coverageDays: p.avgDailySales > 0 ? Math.round((p.stock / p.avgDailySales) * 10) / 10 : 999,
-      status: p.stock === 0 ? 'Out of Stock' : p.stock < 15 ? 'Critical' : p.stock < 30 ? 'Low Stock' : 'In Stock',
-      reorderQty: p.avgDailySales * 15,
-      potentialRevenue: p.stock * p.price * 100,
+      cost: p.cost,
+      price: p.price,
+      valuation: p.stock * p.cost,
+      coverageDays: p.coverageDays,
+      status: p.status,
+      reorderQty: Math.round(p.avgDailySales * 15),
+      potentialRevenue: p.stock * p.price,
     }))
     return { products } as T
   }
@@ -258,6 +276,30 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
   }
 
   if (cleanPath === '/api/analytics/returns') {
+    const custom = localStorage.getItem('ecommind_returns')
+    if (custom) {
+      try {
+        const list = JSON.parse(custom)
+        if (Array.isArray(list) && list.length > 0) {
+          const totalOrders = list.reduce((s, r) => s + (r.orders || 0), 0)
+          const totalReturns = list.reduce((s, r) => s + (r.returns || 0), 0)
+          return {
+            pincodes: list.map((r) => ({
+              pincode: r.pincode,
+              city: r.city || 'Urban Area',
+              orders: r.orders || 0,
+              returns: r.returns || 0,
+              returnRate: r.orders ? Math.round((r.returns / r.orders) * 1000) / 1000 : 0.05,
+              risk: (r.returns / (r.orders || 1)) > 0.25 ? 'High' : (r.returns / (r.orders || 1)) > 0.1 ? 'Medium' : 'Low',
+            })),
+            totalReturns,
+            returnRate: totalOrders ? Math.round((totalReturns / totalOrders) * 1000) / 1000 : 0.08,
+          } as T
+        }
+      } catch {
+        // ignore
+      }
+    }
     return {
       pincodes: [
         { pincode: '110006', city: 'Delhi', orders: 120, returns: 45, returnRate: 0.38, risk: 'High' },
@@ -271,6 +313,28 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
   }
 
   if (cleanPath === '/api/analytics/logistics') {
+    const custom = localStorage.getItem('ecommind_logistics')
+    if (custom) {
+      try {
+        const quotes = JSON.parse(custom)
+        if (Array.isArray(quotes) && quotes.length > 0) {
+          return {
+            quotes: quotes.map((q, idx) => ({
+              id: 'L-' + (idx + 1),
+              courier: q.courier,
+              costPer500g: q.costPer500g,
+              etaDays: q.etaDays,
+              service: q.service || 'Standard Surface',
+              rating: q.rating || 4.5,
+            })),
+            recommended: 'L-1',
+            method: 'Least-cost courier partner',
+          } as T
+        }
+      } catch {
+        // ignore
+      }
+    }
     return {
       quotes: LOGISTICS_QUOTES.map((q) => ({ ...q, costPer500g: q.costPer500g * 100 })),
       recommended: 'L-1',
@@ -339,10 +403,26 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
 
   // 5. Mandate
   if (cleanPath === '/api/mandate') {
-    const mandate: ApiMandate = {
+    const custom = localStorage.getItem('ecommind_mandate')
+    let base = {
       dailyBudget: 5000000,
       maxOrderValue: 2500000,
       maxPerCallCost: 1000,
+    }
+    if (custom) {
+      try {
+        const parsed = JSON.parse(custom)
+        if (parsed.dailyBudget) base.dailyBudget = parsed.dailyBudget
+        if (parsed.maxOrderValue) base.maxOrderValue = parsed.maxOrderValue
+        if (parsed.maxPerCallCost) base.maxPerCallCost = parsed.maxPerCallCost
+      } catch {
+        // ignore
+      }
+    }
+    const mandate: ApiMandate = {
+      dailyBudget: base.dailyBudget,
+      maxOrderValue: base.maxOrderValue,
+      maxPerCallCost: base.maxPerCallCost,
       walletDailyLimit: 10000000,
       maxPriceChangePct: 15,
       minGrossMarginPct: 22,
@@ -395,6 +475,33 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
 
   // 8. Suppliers & Service Agents
   if (cleanPath === '/api/suppliers') {
+    const custom = localStorage.getItem('ecommind_supplier_quotes')
+    if (custom) {
+      try {
+        const quotes = JSON.parse(custom)
+        if (Array.isArray(quotes) && quotes.length > 0) {
+          const map = new Map<string, any>()
+          for (let i = 0; i < quotes.length; i++) {
+            const q = quotes[i]
+            const sName = q.supplier || 'Vendor Partner'
+            if (!map.has(sName)) {
+              map.set(sName, {
+                id: `sup-${i + 1}`,
+                name: sName,
+                category: 'Wholesale & Components',
+                rating: 4.8,
+                verified: true,
+                pincode: '400001',
+                activeContracts: 1,
+              })
+            }
+          }
+          return { suppliers: Array.from(map.values()) } as T
+        }
+      } catch {
+        // ignore
+      }
+    }
     return { suppliers: SUPPLIERS } as T
   }
 
@@ -445,8 +552,64 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
     } as T
   }
 
+  if (cleanPath === '/api/business/onboarding') {
+    const body = (opts.body as { business?: string; category?: string; currency?: string; channel?: string; businessType?: string; gstin?: string; location?: { text?: string } }) || {}
+    const savedStr = localStorage.getItem('ecommind_session')
+    let currentMe: MeResponse = getMockApiResponse<MeResponse>('/api/auth/demo')!
+    if (savedStr) {
+      try { currentMe = JSON.parse(savedStr) } catch { /* ignore */ }
+    }
+    const updatedBiz = {
+      ...currentMe.business,
+      id: currentMe.business?.id || 1,
+      name: body.business || currentMe.business?.name || 'My EcomMind Store',
+      category: body.category || currentMe.business?.category || 'General Electronics',
+      currency: body.currency || 'INR',
+      channel: body.channel || 'Amazon India',
+      businessType: body.businessType || currentMe.business?.businessType || 'Retail',
+      onboarded: true,
+      demoLoaded: true,
+      agentStatus: 'active' as const,
+      plan: 'Growth Plan',
+      gstinMasked: body.gstin || '27AABCU9603R1ZM',
+      gstinStatus: 'Active',
+      location: body.location?.text ? { text: body.location.text, city: null, state: null, country: 'India', verified: true } : currentMe.business?.location || null,
+    }
+    const updatedMe: MeResponse = {
+      ...currentMe,
+      business: updatedBiz,
+    }
+    localStorage.setItem('ecommind_session', JSON.stringify(updatedMe))
+    return updatedMe as T
+  }
+
+  if (cleanPath === '/api/demo/load') {
+    const sessionStr = localStorage.getItem('ecommind_session')
+    if (sessionStr) {
+      try {
+        const session = JSON.parse(sessionStr)
+        if (session.business) session.business.demoLoaded = true
+        localStorage.setItem('ecommind_session', JSON.stringify(session))
+      } catch {
+        // ignore
+      }
+    }
+    return { success: true } as T
+  }
+
   if (cleanPath === '/api/imports') {
-    return { batches: [] } as T
+    const batches = getStoredImportBatches()
+    return {
+      batches,
+      datasets: [
+        { key: 'products', label: 'Products', required: ['sku', 'name', 'price', 'cost', 'stock'], optional: ['category', 'avg_daily_sales'] },
+        { key: 'sales', label: 'Sales history', required: ['date', 'sku', 'units'], optional: ['orders', 'revenue'] },
+        { key: 'returns', label: 'Returns by pincode', required: ['pincode', 'sku', 'orders', 'returns'], optional: ['city'] },
+        { key: 'supplier_quotes', label: 'Supplier quotes', required: ['supplier', 'sku', 'unit_price', 'delivery_days'], optional: ['moq', 'available_qty', 'valid_until'] },
+        { key: 'logistics', label: 'Logistics quotes', required: ['courier', 'cost_per_500g', 'eta_days'], optional: ['service', 'rating', 'cod'] },
+        { key: 'mandate', label: 'Seller mandate', required: ['daily_budget', 'max_order_value', 'max_per_call_cost'], optional: [] },
+      ],
+    } as T
   }
 
   return undefined

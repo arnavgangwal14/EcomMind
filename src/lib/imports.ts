@@ -1,4 +1,5 @@
 import { ApiError } from '@/lib/api'
+import { processClientImport } from './clientImport'
 
 /** One imported dataset (a CSV file or one sheet of a workbook), as stored on the server. */
 export interface ImportBatch {
@@ -24,24 +25,64 @@ export interface ImportBatch {
  * Upload a CSV or XLSX file to the import service. The Import Data page and
  * onboarding both use this, so there is one import pipeline: the server parses,
  * validates and stores the rows and returns a summary per dataset.
+ *
+ * When static hosting or backend is offline, it seamlessly falls back to the
+ * client-side CSV import engine.
  */
 export async function uploadImport(file: File, opts: { dataset?: string; source?: 'import_page' | 'onboarding' } = {}): Promise<ImportBatch[]> {
-  const form = new FormData()
-  form.append('file', file)
-  if (opts.dataset) form.append('dataset', opts.dataset)
-  form.append('source', opts.source ?? 'import_page')
-  let res: Response
+  const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || ''
+  const fullUrl = apiBase ? `${apiBase.replace(/\/$/, '')}/api/imports` : '/api/imports'
+
+  // If live backend URL is provided or reachable, try sending to backend
   try {
-    res = await fetch('/api/imports', { method: 'POST', body: form, credentials: 'same-origin', headers: { Accept: 'application/json' } })
-  } catch {
-    throw new ApiError(0, 'network_error', 'Can’t reach the EcomMind server. Check that the backend is running and try again.')
+    const form = new FormData()
+    form.append('file', file)
+    if (opts.dataset) form.append('dataset', opts.dataset)
+    form.append('source', opts.source ?? 'import_page')
+
+    const res = await fetch(fullUrl, {
+      method: 'POST',
+      body: form,
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    })
+
+    const text = await res.text().catch(() => '')
+    let data: { batches?: ImportBatch[]; error?: { code?: string; message?: string } } | undefined
+    try {
+      data = text ? JSON.parse(text) : undefined
+    } catch {
+      // non-JSON response (e.g. static HTML)
+    }
+
+    if (res.ok && data?.batches) {
+      return data.batches
+    }
+
+    if (res.status === 401) {
+      window.dispatchEvent(new Event('ecommind:unauthorized'))
+      throw new ApiError(401, 'unauthorized', 'Session expired. Please sign in again.')
+    }
+
+    // If static hosting returns 404, 405 Method Not Allowed, or HTML error page on API route,
+    // we continue to client-side fallback below instead of throwing.
+    if (res.status !== 404 && res.status !== 405 && !text.includes('<!DOCTYPE') && !text.includes('<html')) {
+      if (!res.ok) {
+        throw new ApiError(res.status, data?.error?.code ?? 'http_error', data?.error?.message ?? 'Import failed.')
+      }
+    }
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) throw e
+    // Network errors or static hosting: proceed to client-side parser
   }
-  const data = await res.json().catch(() => undefined) as { batches?: ImportBatch[]; error?: { code?: string; message?: string } } | undefined
-  if (!res.ok) {
-    if (res.status === 401) window.dispatchEvent(new Event('ecommind:unauthorized'))
-    throw new ApiError(res.status, data?.error?.code ?? 'http_error', data?.error?.message ?? (res.status === 413 ? 'Files can be at most 10 MB.' : 'Import failed.'))
+
+  // Client-side parser fallback for CSV files
+  const lower = file.name.toLowerCase()
+  if (lower.endsWith('.xlsx')) {
+    throw new ApiError(422, 'xlsx_offline', 'Excel (.xlsx) requires a live backend. In web demo mode, please save your file as CSV (.csv) and upload.')
   }
-  return data?.batches ?? []
+
+  return await processClientImport(file, opts)
 }
 
 export function summarize(b: ImportBatch): string {
