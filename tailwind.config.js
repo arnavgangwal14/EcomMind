@@ -5,22 +5,44 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
+        sans: ["'Plus Jakarta Sans'", "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["'JetBrains Mono'", "ui-monospace", "monospace"],
       },
       colors: {
+        // Semrush inspired design language tokens
+        mint: {
+          bg: "#DDEEEB",
+          card: "#DCEDEA",
+        },
+        lavender: {
+          bg: "#E6E6F6",
+        },
+        ink: {
+          DEFAULT: "#121A16",
+          soft: "#3B4640",
+        },
+        'accent-purple': {
+          DEFAULT: "#BF8FFF",
+          deep: "#7B2FE0",
+        },
+        line: "#C9D6D3",
+        'surface-tint': "#F2F6F6",
+
+        // Standard semantic mapping
         surface: {
-          DEFAULT: "#1B2740",
-          deep: "#10172A",
+          DEFAULT: "#FFFFFF",
+          tint: "#F2F6F6",
+          dark: "#10172A",
         },
         brand: {
-          DEFAULT: "#7965F2",
-          soft: "#9A8BFF",
-          deep: "#5B4BD6",
+          DEFAULT: "#7B2FE0",
+          soft: "#BF8FFF",
+          deep: "#5B1FB8",
         },
-        success: "#22C55E",
-        warning: "#F59E0B",
-        danger: "#EF4444",
+        success: "#14B8A0",
+        warning: "#FF9A3D",
+        danger: "#FF8A80",
+        info: "#23A6FF",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -66,6 +88,7 @@ module.exports = {
         },
       },
       borderRadius: {
+        '3xl': '24px',
         xl: "calc(var(--radius) + 4px)",
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
@@ -73,6 +96,9 @@ module.exports = {
         xs: "calc(var(--radius) - 6px)",
       },
       boxShadow: {
+        'semrush': '0 20px 60px rgba(18, 26, 22, 0.08)',
+        'semrush-hover': '0 24px 70px rgba(18, 26, 22, 0.12)',
+        'frosted': '0 12px 40px rgba(18, 26, 22, 0.05)',
         xs: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
       },
       keyframes: {

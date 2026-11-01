@@ -35,6 +35,8 @@ class RegisterIn(BaseModel):
     email: str = Field(max_length=400)
     password: str = Field(max_length=PASSWORD_MAX)
     category: str | None = Field(default=None, max_length=80)
+    location: str | None = Field(default=None, max_length=300)
+    gstin: str | None = Field(default=None, max_length=30)
 
 
 class LoginIn(BaseModel):
@@ -96,6 +98,27 @@ def register(body: RegisterIn, response: Response, db: Session = Depends(get_db)
         db.rollback()
         raise ApiError(409, "email_taken", "An account with this Gmail address already exists. Sign in instead.", field="email")
     biz = Business(owner_id=user.id, name=body.business.strip(), category=body.category)
+    if body.location and body.location.strip():
+        loc_text = body.location.strip()
+        biz.location_text = loc_text
+        parts = [p.strip() for p in loc_text.split(",") if p.strip()]
+        if len(parts) >= 1:
+            biz.location_city = parts[0]
+        if len(parts) >= 2:
+            biz.location_state = parts[1]
+        if len(parts) >= 3:
+            biz.location_country = parts[2]
+        else:
+            biz.location_country = "India"
+        biz.location_verified = True
+    if body.gstin and body.gstin.strip():
+        from ..validation.gstin import normalize, validate_gstin
+        g_norm = normalize(body.gstin)
+        check = validate_gstin(g_norm)
+        if check.ok:
+            biz.gstin = check.gstin
+            biz.gstin_status = "format_validated"
+            biz.gstin_updated_at = datetime.now(timezone.utc)
     db.add(biz)
     db.flush()
     ensure_mandate(db, biz)

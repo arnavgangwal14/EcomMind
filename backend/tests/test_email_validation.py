@@ -9,6 +9,7 @@ from app.validation.email import INVALID_FORMAT, MESSAGES, UNSUPPORTED_DOMAIN, v
     ("  asharao99@gmail.com  ", "asharao99@gmail.com"),     # surrounding whitespace trimmed
     ("asharao+shop@gmail.com", "asharao+shop@gmail.com"),   # +tag allowed
     ("abc123@GMAIL.com", "abc123@gmail.com"),
+    ("aryan@gmail.com", "aryan@gmail.com"),
 ])
 def test_valid_gmail(raw, expected):
     r = validate_gmail(raw)
@@ -23,7 +24,7 @@ def test_canonical_form_ignores_dots_and_tags():
 @pytest.mark.parametrize("raw", [
     "", "   ", "plainaddress", "@gmail.com", "asharao@", "asha rao@gmail.com", "asharao@@gmail.com",
     "asharao@gmail", "asharao@gmail..com", ".asharao@gmail.com", "asharao.@gmail.com", "asha..rao@gmail.com",
-    "abc@gmail.com",                       # Gmail usernames are 6-30 characters
+    "ab@gmail.com",                       # Gmail usernames are 3-30 characters
     "a" * 31 + "@gmail.com",
     "asha_rao@gmail.com",                  # underscores aren't allowed in Gmail usernames
     "asharao@gmail.com.evil.com",          # actually a different domain, but malformed for us? -> unsupported (see below)

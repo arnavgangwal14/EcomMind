@@ -85,3 +85,14 @@ def test_other_sellers_cannot_see_negotiation(seller):
 def test_timestamps_carry_utc_offset(seller):
     neg = rfq(seller).json()["negotiation"]
     assert neg["createdAt"].endswith("+00:00") and neg["messages"][0]["createdAt"].endswith("+00:00")
+
+
+def test_unverified_supplier_negotiation_replies(seller):
+    # SUP-C is unverified (verified=False)
+    neg = rfq(seller, supplierId="SUP-C", sku="EAR-001").json()["negotiation"]
+    assert neg["status"] == "offer_received"
+    res = seller.post(f"/api/negotiations/{neg['id']}/counter", json={"unitPrice": 18600})
+    assert res.status_code == 200
+    assert res.json()["status"] == "offer_received"
+    msgs = res.json()["messages"]
+    assert any(m["sender"] == "supplier" and m["kind"] in ("offer", "accept") for m in msgs)

@@ -72,7 +72,7 @@ export async function api<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 
   if (!res.ok) {
     // Session ended elsewhere (expired, logged out in another tab): tell the app.
-    if (res.status === 401 && !path.startsWith('/api/auth/')) window.dispatchEvent(new Event('ecommind:unauthorized'))
+    if (res.status === 401 && !path.startsWith('/api/auth/') && !path.startsWith('/api/places/')) window.dispatchEvent(new Event('ecommind:unauthorized'))
     const d = data as { error?: { code?: string; message?: string; field?: string; details?: unknown }; detail?: string } | undefined
     const err = d?.error
     const fallbackMsg = typeof d?.detail === 'string' ? d.detail : (res.status >= 500 ? 'The server had a problem. Try again in a moment.' : 'Request failed.')

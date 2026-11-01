@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { motion } from 'framer-motion'
-import { AlertCircle, BrainCircuit, Factory, Handshake, Info, Loader2, Send, User, X } from 'lucide-react'
+import { AlertCircle, Factory, Handshake, Info, Loader2, Send, User, X } from 'lucide-react'
+import { EcomMindLogoMark } from '@/components/brand/EcomMindLogo'
 import { toast } from 'sonner'
 import { useApiQuery, useDataStore } from '@/store/DataStore'
 import { api, ApiError, type ApiApproval, type ApiNegotiation } from '@/lib/api'
@@ -143,8 +144,8 @@ function NegotiationDetail({ id }: { id: string }) {
               }
               return (
                 <motion.div key={m.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className={cx('flex gap-2.5', mine && 'flex-row-reverse')}>
-                  <div className={cx('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', m.sender === 'ecommind' ? 'btn-glow' : 'border border-border bg-secondary')}>
-                    {m.sender === 'ecommind' ? <BrainCircuit className="h-4 w-4 text-white" aria-hidden /> : m.sender === 'seller' ? <User className="h-4 w-4 text-brand-soft" aria-hidden /> : <Factory className="h-4 w-4 text-brand-soft" aria-hidden />}
+                  <div className={cx('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', m.sender === 'ecommind' ? 'bg-white dark:bg-white/10 border border-[#C9D6D3]/60 dark:border-white/10 p-1' : 'border border-border bg-secondary')}>
+                    {m.sender === 'ecommind' ? <EcomMindLogoMark className="h-5 w-5" /> : m.sender === 'seller' ? <User className="h-4 w-4 text-brand-soft" aria-hidden /> : <Factory className="h-4 w-4 text-brand-soft" aria-hidden />}
                   </div>
                   <div className={cx('max-w-[78%] rounded-xl border px-3.5 py-2.5', mine ? 'border-brand/35 bg-brand/12' : 'border-border bg-card')}>
                     <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">

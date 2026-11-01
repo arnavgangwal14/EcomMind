@@ -9,6 +9,7 @@ import Login from '@/pages/auth/Login'
 import Register from '@/pages/auth/Register'
 import Onboarding from '@/pages/auth/Onboarding'
 import Overview from '@/pages/Overview'
+import LandingPage from '@/pages/LandingPage'
 import { Skeleton } from '@/components/ui/skeleton'
 
 const Inventory = lazy(() => import('@/pages/Inventory'))
@@ -61,15 +62,32 @@ function PublicOnly({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+function RootRoute() {
+  const { auth } = useApp()
+  if (auth.status === 'loading') return <SessionLoader />
+  if (auth.loggedIn) {
+    if (!auth.onboarded) return <Navigate to="/onboarding" replace />
+    return (
+      <AppLayout>
+        <Overview />
+      </AppLayout>
+    )
+  }
+  return <LandingPage />
+}
+
 function AppRoutes() {
   const { auth } = useApp()
   return (
     <Routes>
+      <Route path="/" element={<RootRoute />} />
+      <Route path="/welcome" element={<LandingPage />} />
+      <Route path="/landing" element={<LandingPage />} />
+      <Route path="/tour" element={<LandingPage />} />
       <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
       <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
       <Route path="/onboarding" element={auth.status === 'loading' ? <SessionLoader /> : auth.loggedIn ? (auth.onboarded ? <Navigate to="/" replace /> : <Onboarding />) : <Navigate to="/login" replace />} />
       <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
-        <Route index element={<Overview />} />
         <Route path="inventory" element={<Suspense fallback={<PageLoader />}><Inventory /></Suspense>} />
         <Route path="selling" element={<Suspense fallback={<PageLoader />}><Selling /></Suspense>} />
         <Route path="festivals" element={<Suspense fallback={<PageLoader />}><Festivals /></Suspense>} />

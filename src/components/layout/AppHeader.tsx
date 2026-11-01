@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import {
-  Bell, Calendar, ChevronDown, Menu, Play, Search, Store, User, Settings2, LogOut, Sparkles,
+  Bell, Calendar, ChevronDown, Menu, Play, Search, Store, Sparkles,
 } from 'lucide-react'
 import { useApp } from '@/store/AppContext'
 import { cx, timeAgo, todayLabel } from '@/lib/format'
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { SidebarContent } from './AppSidebar'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { ExploreButton } from '@/components/ExploreModal'
 
 const ROUTE_TITLES: Record<string, string> = {
   '/': 'Overview', '/inventory': 'Inventory', '/analytics': 'Sales Analytics', '/insights': 'AI Insights',
@@ -36,7 +37,7 @@ const SEARCH_PAGES = [
 ]
 
 export function AppHeader() {
-  const { agentStatus, demoLoaded, loadDemoBusiness, notifications, markNotificationsRead, auth, logout } = useApp()
+  const { agentStatus, demoLoaded, loadDemoBusiness, notifications, markNotificationsRead, auth } = useApp()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
@@ -59,89 +60,105 @@ export function AppHeader() {
     return [...pages, ...products, ...agents].slice(0, 8)
   }, [query, productsQ.data, agentsQ.data])
 
-  const go = (route: string) => {
-    setSearchOpen(false)
-    setQuery('')
-    navigate(route)
-  }
-
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-2 border-b border-border bg-background/85 px-4 backdrop-blur-md md:gap-3 md:px-6">
-      {/* Mobile menu */}
+    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-[#C9D6D3]/60 dark:border-white/10 bg-white/75 dark:bg-[#0E1511]/80 px-4 md:px-8 backdrop-blur-md transition-colors">
+      {/* Mobile drawer trigger */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open navigation">
+          <Button variant="ghost" size="icon" className="rounded-full lg:hidden" aria-label="Open navigation menu">
             <Menu className="h-5 w-5" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-72 border-sidebar-border bg-sidebar p-0">
+        <SheetContent side="left" className="w-72 p-0 bg-white dark:bg-[#0E1511] border-r border-[#C9D6D3] dark:border-white/10">
           <SidebarContent onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
 
-      {/* Breadcrumb */}
-      <nav aria-label="Breadcrumb" className="hidden items-center gap-1.5 text-sm text-muted-foreground md:flex">
-        <span className="font-medium text-foreground">EcomMind</span>
-        <span aria-hidden>/</span>
-        <span>{crumbs}</span>
-      </nav>
+      {/* Breadcrumb title */}
+      <div className="hidden sm:flex items-center gap-2 text-xs font-semibold">
+        <span className="text-[#3B4640]/70 dark:text-muted-foreground">EcomMind</span>
+        <span className="text-[#C9D6D3] dark:text-white/20">/</span>
+        <span className="text-[#121A16] dark:text-white font-bold">{crumbs}</span>
+      </div>
 
-      {/* Search */}
-      <div ref={searchRef} className="relative mx-auto w-full max-w-md flex-1">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-        <input
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setSearchOpen(true) }}
-          onFocus={() => setSearchOpen(true)}
-          onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && results[0]) go(results[0].route); if (e.key === 'Escape') setSearchOpen(false) }}
-          placeholder="Search products, agents, pages…"
-          aria-label="Global search"
-          className="h-9 w-full rounded-lg border border-border bg-card/70 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-brand/60 focus:outline-none focus:ring-2 focus:ring-brand/25"
-        />
+      {/* Global search */}
+      <div ref={searchRef} className="relative flex-1 max-w-md">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#3B4640]/60 dark:text-muted-foreground" aria-hidden />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setSearchOpen(true)
+            }}
+            onFocus={() => setSearchOpen(true)}
+            placeholder="Search products, agents, pages…"
+            className="h-10 w-full rounded-full border border-[#C9D6D3] dark:border-white/10 bg-[#F2F6F6] dark:bg-white/5 pl-9 pr-3 text-xs text-[#121A16] dark:text-white placeholder:text-[#3B4640]/60 dark:placeholder:text-muted-foreground focus:border-[#7B2FE0] focus:bg-white dark:focus:bg-[#0E1511] focus:outline-hidden focus:ring-2 focus:ring-[#7B2FE0]/20 transition-all"
+            aria-label="Search products, agents and pages"
+          />
+        </div>
         {searchOpen && results.length > 0 && (
-          <div className="absolute left-0 right-0 top-11 z-40 overflow-hidden rounded-xl border border-border bg-popover shadow-xl">
+          <div className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-2xl border border-[#C9D6D3] dark:border-white/10 bg-white dark:bg-[#0E1511] py-1 shadow-xl">
             {results.map((r) => (
               <button
-                key={r.kind + r.label}
-                onMouseDown={() => go(r.route)}
-                className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left text-sm transition-colors hover:bg-secondary"
+                key={`${r.kind}-${r.label}`}
+                onClick={() => {
+                  navigate(r.route)
+                  setSearchOpen(false)
+                  setQuery('')
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[#121A16] dark:text-white hover:bg-[#DCEDEA]/50 dark:hover:bg-white/5 transition-colors"
               >
-                <span className="rounded-md bg-brand/12 px-1.5 py-0.5 text-[10px] font-semibold text-brand-soft">{r.kind}</span>
-                <span className="truncate">{r.label}</span>
+                <span className="rounded-full bg-[#BF8FFF]/30 px-2 py-0.5 text-[10px] font-bold text-[#7B2FE0] dark:text-[#BF8FFF]">
+                  {r.kind}
+                </span>
+                <span className="truncate font-medium">{r.label}</span>
               </button>
             ))}
           </div>
         )}
       </div>
 
-      {/* AI status */}
+      {/* AI status badge */}
       <div
         className={cx(
-          'hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium xl:flex',
-          agentStatus === 'active' ? 'border-success/30 bg-success/10 text-success' : agentStatus === 'paused' ? 'border-danger/30 bg-danger/10 text-danger' : 'border-warning/30 bg-warning/10 text-warning',
+          'hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold xl:flex shadow-xs',
+          agentStatus === 'active'
+            ? 'border-[#14B8A0]/30 bg-[#14B8A0]/10 text-[#14B8A0]'
+            : agentStatus === 'paused'
+            ? 'border-[#FF8A80]/30 bg-[#FF8A80]/10 text-[#FF8A80]'
+            : 'border-[#FF9A3D]/30 bg-[#FF9A3D]/10 text-[#FF9A3D]',
         )}
         title={`EcomMind agent ecommind-01 is ${agentStatus}`}
       >
         <span className="relative flex h-2 w-2">
-          {agentStatus === 'active' && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-60" />}
-          <span className={cx('relative inline-flex h-2 w-2 rounded-full', agentStatus === 'active' ? 'bg-success' : agentStatus === 'paused' ? 'bg-danger' : 'bg-warning')} />
+          {agentStatus === 'active' && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#14B8A0] opacity-75" />}
+          <span className={cx('relative inline-flex h-2 w-2 rounded-full', agentStatus === 'active' ? 'bg-[#14B8A0]' : agentStatus === 'paused' ? 'bg-[#FF8A80]' : 'bg-[#FF9A3D]')} />
         </span>
         ecommind-01 {agentStatus === 'active' ? 'online' : agentStatus}
       </div>
 
-      {/* Load demo */}
+      {/* Explore Button (Uiverse design) */}
+      <ExploreButton variant="compact" className="hidden sm:flex" />
+
+      {/* Reload / Load demo */}
       <Button
         size="sm"
         onClick={() => loadDemoBusiness()}
-        className={cx('hidden sm:inline-flex', demoLoaded ? 'border border-brand/40 bg-brand/10 text-brand-soft hover:bg-brand/20' : 'btn-glow border-0 text-white')}
+        className={cx(
+          'hidden sm:inline-flex rounded-full text-xs font-bold transition-all',
+          demoLoaded
+            ? 'border border-[#7B2FE0]/40 bg-[#7B2FE0]/10 text-[#7B2FE0] dark:text-[#BF8FFF] hover:bg-[#7B2FE0]/20'
+            : 'btn-glow border-0 text-white',
+        )}
       >
-        {demoLoaded ? <Sparkles className="h-3.5 w-3.5" aria-hidden /> : <Play className="h-3.5 w-3.5" aria-hidden />}
-        {demoLoaded ? 'Reload Demo' : 'Load Demo Business'}
+        {demoLoaded ? <Sparkles className="h-3.5 w-3.5 mr-1" aria-hidden /> : <Play className="h-3.5 w-3.5 mr-1" aria-hidden />}
+        {demoLoaded ? 'Reload Demo' : 'Load Demo'}
       </Button>
 
       {/* Date */}
-      <div className="hidden items-center gap-1.5 text-xs text-muted-foreground 2xl:flex">
+      <div className="hidden items-center gap-1.5 text-xs font-semibold text-[#3B4640]/70 dark:text-muted-foreground 2xl:flex">
         <Calendar className="h-3.5 w-3.5" aria-hidden />
         {todayLabel()}
       </div>
@@ -149,21 +166,26 @@ export function AppHeader() {
       {/* Store selector */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="hidden items-center gap-1.5 rounded-lg border border-border bg-card/70 px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-secondary md:flex" aria-label="Select store">
-            <Store className="h-3.5 w-3.5 text-brand-soft" aria-hidden />
+          <button
+            className="hidden items-center gap-1.5 rounded-full border border-[#C9D6D3] dark:border-white/10 bg-white/80 dark:bg-white/5 px-3 py-1.5 text-xs font-semibold text-[#121A16] dark:text-white transition-all hover:border-[#7B2FE0] md:flex shadow-xs"
+            aria-label="Select store"
+          >
+            <Store className="h-3.5 w-3.5 text-[#7B2FE0] dark:text-[#BF8FFF]" aria-hidden />
             <span className="max-w-[110px] truncate">{store}</span>
-            <ChevronDown className="h-3 w-3 text-muted-foreground" aria-hidden />
+            <ChevronDown className="h-3 w-3 text-[#3B4640] dark:text-muted-foreground" aria-hidden />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel>Your store</DropdownMenuLabel>
-          <DropdownMenuItem className="gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-success" />
+        <DropdownMenuContent align="end" className="w-56 rounded-2xl border-[#C9D6D3] dark:border-white/10 bg-white dark:bg-[#0E1511]">
+          <DropdownMenuLabel className="font-bold text-[#121A16] dark:text-white">Your store</DropdownMenuLabel>
+          <DropdownMenuItem className="gap-2 font-medium">
+            <span className="h-2 w-2 rounded-full bg-[#14B8A0]" />
             {store}
             <span className="ml-auto text-[10px] text-muted-foreground">current</span>
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => navigate('/settings')}>Business profile…</DropdownMenuItem>
+          <DropdownMenuSeparator className="bg-[#C9D6D3]/50 dark:bg-white/10" />
+          <DropdownMenuItem onSelect={() => navigate('/settings')} className="font-medium">
+            Business profile…
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -173,56 +195,54 @@ export function AppHeader() {
       {/* Notifications */}
       <DropdownMenu onOpenChange={(open) => { if (!open) markNotificationsRead() }}>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="relative" aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}>
-            <Bell className="h-4.5 w-4.5" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative rounded-full text-[#3B4640] dark:text-white hover:bg-black/5 dark:hover:bg-white/10"
+            aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}
+          >
+            <Bell className="h-4 w-4" aria-hidden />
             {unread > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9px] font-bold text-white">{unread}</span>
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF8A80] px-1 text-[9px] font-extrabold text-white shadow-xs">
+                {unread}
+              </span>
             )}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-80">
-          <DropdownMenuLabel className="flex items-center justify-between">
-            Notifications
-            {unread > 0 && <span className="text-[10px] font-normal text-muted-foreground">{unread} new</span>}
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {notifications.length === 0 && (
-            <div className="px-3 py-6 text-center text-xs text-muted-foreground">No notifications yet. Load the demo business to see agent alerts.</div>
-          )}
-          {notifications.slice(0, 6).map((n) => (
-            <DropdownMenuItem key={n.id} onSelect={() => navigate(n.route)} className="flex cursor-pointer flex-col items-start gap-0.5 py-2.5">
-              <div className="flex w-full items-center gap-2">
-                <span className={cx('h-1.5 w-1.5 shrink-0 rounded-full', n.tone === 'warning' ? 'bg-warning' : n.tone === 'success' ? 'bg-success' : 'bg-brand')} />
-                <span className="flex-1 truncate text-[13px] font-medium">{n.title}</span>
-                <span className="text-[10px] text-muted-foreground">{timeAgo(n.time)}</span>
-              </div>
-              <span className="pl-3.5 text-xs text-muted-foreground line-clamp-2">{n.body}</span>
-            </DropdownMenuItem>
-          ))}
+        <DropdownMenuContent align="end" className="w-80 rounded-2xl border-[#C9D6D3] dark:border-white/10 bg-white dark:bg-[#0E1511] p-0 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-[#C9D6D3]/60 dark:border-white/10 px-4 py-3">
+            <p className="text-xs font-bold text-[#121A16] dark:text-white">Notifications</p>
+            {unread > 0 && (
+              <button
+                onClick={() => markNotificationsRead()}
+                className="text-[11px] font-bold text-[#7B2FE0] dark:text-[#BF8FFF] hover:underline"
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
+          <div className="max-h-72 overflow-y-auto divide-y divide-[#C9D6D3]/40 dark:divide-white/5">
+            {notifications.length === 0 ? (
+              <p className="p-4 text-center text-xs text-[#3B4640] dark:text-muted-foreground">No notifications yet.</p>
+            ) : (
+              notifications.slice(0, 6).map((n) => (
+                <div key={n.id} className={cx('p-3.5 text-xs transition-colors', !n.read && 'bg-[#BF8FFF]/10 dark:bg-white/5')}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-bold text-[#121A16] dark:text-white">{n.title}</p>
+                    <span className="text-[10px] text-[#3B4640]/70 dark:text-muted-foreground">{timeAgo(n.time)}</span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-[#3B4640] dark:text-muted-foreground">{n.body}</p>
+                </div>
+              ))
+            )}
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Profile */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-soft to-brand text-xs font-bold text-white" aria-label="Profile menu">
-            {(auth.sellerName || 'S').slice(0, 1).toUpperCase()}
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-52">
-          <DropdownMenuLabel>
-            <p className="text-sm font-medium">{auth.sellerName || 'Seller'}</p>
-            <p className="text-xs font-normal text-muted-foreground">{auth.email}</p>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => navigate('/settings')}><User className="mr-2 h-4 w-4" /> Profile & mandate</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => navigate('/settings')}><Settings2 className="mr-2 h-4 w-4" /> Settings</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={async () => { await logout(); navigate('/login') }} className="text-danger focus:text-danger">
-            <LogOut className="mr-2 h-4 w-4" /> Log out
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* User avatar */}
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#7B2FE0] to-[#BF8FFF] text-xs font-bold text-white shadow-xs">
+        {(auth.sellerName || 'A').slice(0, 1).toUpperCase()}
+      </div>
     </header>
   )
 }

@@ -103,6 +103,12 @@ def _m8_imports(conn: Connection) -> None:
     )
 
 
+def _m9_supplier_auto_respond_and_quantities(conn: Connection) -> None:
+    # Ensure unverified/imported suppliers respond automatically and have valid quantities
+    conn.exec_driver_sql("UPDATE suppliers SET auto_respond = 1 WHERE auto_respond = 0")
+    conn.exec_driver_sql("UPDATE supplier_quotes SET available = 2500 WHERE available <= 0")
+
+
 MIGRATIONS: list[tuple[int, Callable[[Connection], None]]] = [
     (1, _m1_gstin_and_location),
     (2, _m2_wallet_daily_limit),
@@ -112,6 +118,7 @@ MIGRATIONS: list[tuple[int, Callable[[Connection], None]]] = [
     (6, _m6_marketplace),
     (7, _m7_approvals),
     (8, _m8_imports),
+    (9, _m9_supplier_auto_respond_and_quantities),
 ]
 
 

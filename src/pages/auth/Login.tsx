@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { BrainCircuit, Loader2, Play } from 'lucide-react'
+import { Loader2, Play } from 'lucide-react'
+import { EcomMindLogoMark } from '@/components/brand/EcomMindLogo'
 import { toast } from 'sonner'
 import { useApp } from '@/store/AppContext'
 import { ApiError } from '@/lib/api'
@@ -57,13 +58,39 @@ export default function Login() {
 
   return (
     <AuthShell>
+      <div className="mb-5">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-[#7B2FE0] dark:text-[#BF8FFF] hover:underline"
+        >
+          ← Back to Product Tour & Feature Overview
+        </Link>
+      </div>
+
       <div className="mb-8 lg:hidden">
         <div className="flex items-center gap-2.5">
-          <div className="btn-glow flex h-9 w-9 items-center justify-center rounded-xl">
-            <BrainCircuit className="h-5 w-5 text-white" aria-hidden />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-white/10 p-1.5 shadow-sm border border-[#C9D6D3]/60 dark:border-white/10">
+            <EcomMindLogoMark className="h-7 w-7" />
           </div>
-          <p className="text-lg font-semibold">EcomMind</p>
+          <p className="text-lg font-extrabold text-[#091B3A] dark:text-white">
+            Ecom<span className="text-[#0066FF] dark:text-[#23A6FF]">Mind</span>
+          </p>
         </div>
+      </div>
+
+      <div className="mb-6 flex rounded-lg bg-secondary/40 p-1 border border-border/50">
+        <Link
+          to="/login"
+          className="flex-1 rounded-md py-1.5 text-center text-xs font-semibold bg-background text-foreground shadow-xs transition-all"
+        >
+          Sign In
+        </Link>
+        <Link
+          to="/register"
+          className="flex-1 rounded-md py-1.5 text-center text-xs font-medium text-muted-foreground hover:text-foreground transition-all"
+        >
+          Create Account
+        </Link>
       </div>
 
       <h2 className="text-2xl font-semibold tracking-tight">Welcome back</h2>

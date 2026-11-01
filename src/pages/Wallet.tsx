@@ -10,6 +10,7 @@ import { ChartCard, ChartEmpty, ChartSkeleton, MetricCard, PageHeader, PanelErro
 import { CountUp } from '@/components/CountUp'
 import { tooltipStyle } from '@/lib/chartTheme'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 interface WalletInfo { balance: number; spentToday: number; dailyLimit: number; budgetConsumedToday: number; dailyBudget: number; inEscrow: number }
@@ -25,14 +26,20 @@ export default function Wallet() {
   const daily = useApiQuery<{ series: { date: string; amount: number }[] }>('/api/analytics/wallet-daily?days=7', ['wallet'])
   const txns = useApiQuery<Paged<ApiTxn>>('/api/activity/transactions?pageSize=15', ['wallet'])
   const [topping, setTopping] = useState(false)
+  const [topUpAmount, setTopUpAmount] = useState('5000')
 
   const topUp = async () => {
-    if (topping) return
+    const val = Number(topUpAmount)
+    if (topping || isNaN(val) || val <= 0) {
+      if (isNaN(val) || val <= 0) toast.error('Enter a valid top-up amount greater than ₹0')
+      return
+    }
     setTopping(true)
+    const amountInPaise = Math.round(val * 100)
     try {
-      await api('/api/wallet/topups', { body: { amount: 5000_00 }, idempotencyKey: newIdempotencyKey('topup') })
+      await api('/api/wallet/topups', { body: { amount: amountInPaise }, idempotencyKey: newIdempotencyKey('topup') })
       store.invalidate('wallet', 'activity', 'analytics', 'escrow')
-      toast.success('Wallet topped up', { description: '₹5,000 added (simulated demo funds).' })
+      toast.success('Wallet topped up', { description: `${formatPaise(amountInPaise)} added (simulated demo funds).` })
     } catch (e) {
       toast.error('Top-up failed', { description: e instanceof ApiError ? e.message : undefined })
     } finally {
@@ -50,7 +57,44 @@ export default function Wallet() {
       <PageHeader
         title="Wallet & Transactions"
         subtitle="Micro-payment wallet for agent-to-agent commerce. Balances come from the transaction ledger; all funds are simulated."
-        actions={<Button size="sm" className="btn-glow border-0 text-white" onClick={topUp} disabled={topping}>{topping ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Plus className="h-3.5 w-3.5" aria-hidden />} Top up ₹5,000</Button>}
+        actions={
+          <div className="flex items-center gap-2">
+            <div className="relative w-28 sm:w-36">
+              <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
+                ₹
+              </span>
+              <Input
+                type="number"
+                min={1}
+                step="any"
+                placeholder="5000"
+                value={topUpAmount}
+                onChange={(e) => setTopUpAmount(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void topUp()
+                  }
+                }}
+                className="h-9 pl-6 pr-2 text-xs font-medium"
+                aria-label="Top-up amount in rupees"
+              />
+            </div>
+            <Button
+              size="sm"
+              className="btn-glow border-0 text-white h-9"
+              onClick={topUp}
+              disabled={topping || !topUpAmount || Number(topUpAmount) <= 0}
+            >
+              {topping ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Plus className="h-3.5 w-3.5" aria-hidden />
+              )}
+              Top up
+            </Button>
+          </div>
+        }
       />
 
       {wallet.error && <div className="mb-4"><PanelError message={wallet.error.message} onRetry={wallet.reload} /></div>}

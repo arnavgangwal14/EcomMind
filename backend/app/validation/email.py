@@ -38,9 +38,9 @@ _GENERAL_RE = re.compile(
     rf"^{_LOCAL_ATOM}(?:\.{_LOCAL_ATOM})*@"
     r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$"
 )
-# Gmail username: 6-30 chars of letters/digits/dots, no leading/trailing/double
+# Gmail username: 3-30 chars of letters/digits/dots, no leading/trailing/double
 # dot. Optional "+tag" for sub-addressing.
-_GMAIL_USER_RE = re.compile(r"^(?=.{6,30}$)[a-z0-9]+(?:\.[a-z0-9]+)*$")
+_GMAIL_USER_RE = re.compile(r"^(?=.{3,30}$)[a-z0-9]+(?:\.[a-z0-9]+)*$")
 _GMAIL_TAG_RE = re.compile(r"^[a-z0-9._-]{1,40}$")
 
 

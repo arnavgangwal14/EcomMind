@@ -11,6 +11,7 @@ describe('validateGmail', () => {
     ['Asha.Rao@Gmail.COM', 'asha.rao@gmail.com'],
     ['  asharao99@gmail.com  ', 'asharao99@gmail.com'],
     ['asharao+shop@gmail.com', 'asharao+shop@gmail.com'],
+    ['aryan@gmail.com', 'aryan@gmail.com'],
   ])('accepts %s', (raw, email) => {
     const r = validateGmail(raw)
     expect(r.ok && r.email).toBe(email)
@@ -22,7 +23,7 @@ describe('validateGmail', () => {
   })
 
   it.each(['', '   ', 'plainaddress', '@gmail.com', 'asharao@', 'asha rao@gmail.com', 'asharao@@gmail.com', 'asharao@gmail',
-    '.asharao@gmail.com', 'asharao.@gmail.com', 'asha..rao@gmail.com', 'abc@gmail.com', 'a'.repeat(31) + '@gmail.com', 'asha_rao@gmail.com'])(
+    '.asharao@gmail.com', 'asharao.@gmail.com', 'asha..rao@gmail.com', 'ab@gmail.com', 'a'.repeat(31) + '@gmail.com', 'asha_rao@gmail.com'])(
     'rejects bad format %j', (raw) => {
       const r = validateGmail(raw)
       expect(r.ok).toBe(false)

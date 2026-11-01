@@ -14,7 +14,7 @@ export interface PlaceValue {
 
 /** Whether a location value may be submitted, given the server's policy. */
 export function locationProblem(v: PlaceValue, verificationRequired: boolean): string | undefined {
-  if (v.text.trim().length < 2) return 'Enter your business location.'
+  if (v.text.trim().length < 1) return 'Enter your business location.'
   if (verificationRequired && !v.verified) return 'Pick your location from the suggestions list.'
   return undefined
 }

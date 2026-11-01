@@ -9,7 +9,7 @@ interface ThemeContextType {
   effectiveTheme: 'dark' | 'light'
 }
 
-const THEME_STORAGE_KEY = 'ecommind.theme'
+const THEME_STORAGE_KEY = 'ecommind.theme.v2'
 
 const ThemeContext = createContext<ThemeContextType | null>(null)
 
@@ -23,10 +23,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
-    return 'dark' // default to existing dark look
+    return 'light' // Semrush pastel light theme is default
   })
 
-  const [effectiveTheme, setEffectiveTheme] = useState<'dark' | 'light'>('dark')
+  const [effectiveTheme, setEffectiveTheme] = useState<'dark' | 'light'>('light')
 
   useEffect(() => {
     const root = document.documentElement

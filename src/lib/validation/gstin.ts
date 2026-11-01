@@ -36,6 +36,15 @@ export const SAMPLE_GSTINS: SampleGstin[] = [
   { gstin: '07AAAAA0000A1Z4', label: 'DL', state: 'Delhi' },
   { gstin: '24AAACG8466C1ZS', label: 'GJ', state: 'Gujarat' },
   { gstin: '33AAACH7409R1Z8', label: 'TN', state: 'Tamil Nadu' },
+  { gstin: '08AABCB1234D1ZC', label: 'RJ', state: 'Rajasthan' },
+  { gstin: '09AABCB1234D1ZA', label: 'UP', state: 'Uttar Pradesh' },
+  { gstin: '19AABCB1234D1Z9', label: 'WB', state: 'West Bengal' },
+  { gstin: '36AABCB1234D1ZD', label: 'TS', state: 'Telangana' },
+  { gstin: '06AABCB1234D1ZG', label: 'HR', state: 'Haryana' },
+  { gstin: '03AABCB1234D1ZM', label: 'PB', state: 'Punjab' },
+  { gstin: '32AABCB1234D1ZL', label: 'KL', state: 'Kerala' },
+  { gstin: '23AABCB1234D1ZK', label: 'MP', state: 'Madhya Pradesh' },
+  { gstin: '10AABCB1234D1ZR', label: 'BR', state: 'Bihar' },
 ]
 
 export type GstinErrorCode = keyof typeof GSTIN_MESSAGES

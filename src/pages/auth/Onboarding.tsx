@@ -37,9 +37,30 @@ export default function Onboarding() {
     api<{ verificationRequired: boolean }>('/api/places/config').then((c) => setVerificationRequired(c.verificationRequired)).catch(() => {})
   }, [])
   useEffect(() => {
-    if (me?.business?.category && !form.category && CATEGORIES.includes(me.business.category)) setForm((f) => ({ ...f, category: me.business!.category! }))
+    if (me?.business) {
+      if (me.business.category && !form.category && CATEGORIES.includes(me.business.category)) {
+        setForm((f) => ({ ...f, category: me.business!.category! }))
+      }
+      if (me.business.name && !form.business) {
+        setForm((f) => ({ ...f, business: me.business!.name }))
+      }
+      if (me.business.location?.text && !location.text) {
+        setLocation({
+          text: me.business.location.text,
+          placeId: `city:${(me.business.location.city || '').toLowerCase()}`,
+          sessionToken: null,
+          city: me.business.location.city,
+          state: me.business.location.state,
+          country: me.business.location.country,
+          verified: !!me.business.location.verified,
+        })
+      }
+      if (auth.gstin && !form.gstin) {
+        setForm((f) => ({ ...f, gstin: auth.gstin! }))
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me])
+  }, [me, auth.gstin])
 
   const gstinOk = validateGstin(form.gstin).ok
   const canNext =
@@ -150,11 +171,25 @@ export default function Onboarding() {
               spellCheck={false}
               className="font-mono uppercase tracking-wide"
               onChange={(e) => {
-                const v = normalizeGstin(e.target.value)
+                let v = normalizeGstin(e.target.value)
+                const expected = getExpectedCheckDigit(v)
+                if (v.length === 14 && expected) {
+                  v = v + expected
+                }
                 setForm({ ...form, gstin: v })
                 setErrors((x) => ({ ...x, gstin: gstinLiveError(v) }))
               }}
-              onBlur={() => { if (!form.gstin) return; const r = validateGstin(form.gstin); setErrors((x) => ({ ...x, gstin: r.ok ? undefined : r.message })) }}
+              onBlur={() => {
+                if (!form.gstin) return
+                const expected = getExpectedCheckDigit(form.gstin)
+                let v = form.gstin
+                if (expected && (v.length === 14 || (v.length === 15 && v[14] !== expected))) {
+                  v = v.slice(0, 14) + expected
+                  setForm((f) => ({ ...f, gstin: v }))
+                }
+                const r = validateGstin(v)
+                setErrors((x) => ({ ...x, gstin: r.ok ? undefined : r.message }))
+              }}
               aria-invalid={!!errors.gstin}
               aria-describedby="ob-gstin-help"
             />

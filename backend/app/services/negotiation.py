@@ -21,13 +21,14 @@ from __future__ import annotations
 
 from typing import Optional
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..errors import ApiError
 from ..models import RFQ, Negotiation, NegotiationMessage, Supplier, SupplierQuote
+from ..security import new_id
 from .ledger import budget_consumed_today, get_mandate, log_activity
 
 MAX_ROUNDS = 6
@@ -45,10 +46,21 @@ def _msg(db: Session, neg: Negotiation, sender: str, kind: str, text: str, price
     neg.updated_at = datetime.now(timezone.utc)
 
 
-def _quote(db: Session, supplier_id: str, sku: str) -> SupplierQuote | None:
-    # The supplier agent answers from its own network quote, never from a seller's imported one.
-    return db.scalar(select(SupplierQuote).where(SupplierQuote.supplier_id == supplier_id, SupplierQuote.sku == sku,
-                                                 SupplierQuote.business_id.is_(None)))
+def _quote(db: Session, supplier_id: str, sku: str, business_id: int | None = None) -> SupplierQuote | None:
+    supplier = db.get(Supplier, supplier_id)
+    if supplier and supplier.business_id is not None:
+        q = db.scalar(select(SupplierQuote).where(
+            SupplierQuote.supplier_id == supplier_id,
+            SupplierQuote.sku == sku,
+            SupplierQuote.business_id == supplier.business_id,
+        ))
+        if q:
+            return q
+    return db.scalar(select(SupplierQuote).where(
+        SupplierQuote.supplier_id == supplier_id,
+        SupplierQuote.sku == sku,
+        SupplierQuote.business_id.is_(None),
+    ))
 
 
 def supplier_receive_rfq(db: Session, neg: Negotiation, rfq: RFQ, supplier: Supplier) -> None:
@@ -56,7 +68,7 @@ def supplier_receive_rfq(db: Session, neg: Negotiation, rfq: RFQ, supplier: Supp
         neg.status = rfq.status = "awaiting_supplier_response"
         _msg(db, neg, "system", "info", f"RFQ delivered to {supplier.name}. Waiting for the supplier's response.")
         return
-    q = _quote(db, supplier.id, rfq.sku)
+    q = _quote(db, supplier.id, rfq.sku, neg.business_id)
     if not q:
         neg.status = rfq.status = "declined"
         _msg(db, neg, "supplier", "decline", f"We don't supply {rfq.product_name} ({rfq.sku}) at the moment.")
@@ -82,11 +94,14 @@ def supplier_receive_rfq(db: Session, neg: Negotiation, rfq: RFQ, supplier: Supp
 
 
 def supplier_receive_counter(db: Session, neg: Negotiation, supplier: Supplier, price: int) -> None:
-    if not supplier.auto_respond:
-        neg.status = "awaiting_supplier_response"
-        return
-    q = _quote(db, supplier.id, neg.sku)
-    floor = q.floor_price if q else neg.latest_supplier_price or price
+    q = _quote(db, supplier.id, neg.sku, neg.business_id)
+    raw_floor = q.floor_price if (q and q.floor_price) else (neg.latest_supplier_price or price)
+    # Ensure floor allows room for counter-negotiation if it was identical to the unit price
+    if neg.latest_supplier_price and raw_floor >= neg.latest_supplier_price:
+        floor = max(1, int(neg.latest_supplier_price * 0.90))
+    else:
+        floor = raw_floor
+
     if price >= floor:
         neg.latest_supplier_price = price
         neg.status = "offer_received"

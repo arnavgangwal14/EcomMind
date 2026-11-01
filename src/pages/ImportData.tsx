@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router'
 import { AlertTriangle, ArrowRight, Check, Download, FileSpreadsheet, FileWarning, Loader2, Play, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { useDataStore, useApiQuery } from '@/store/DataStore'
-import { ApiError } from '@/lib/api'
 import { summarize, uploadImport, type ImportBatch } from '@/lib/imports'
 import { downloadSampleRows } from './importSampleData'
 import { cx, downloadCSV, formatDateTime, formatNum } from '@/lib/format'
@@ -11,12 +10,6 @@ import { PageHeader, PanelError, StatusBadge } from '@/components/common'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-
-/* ------------------------------------------------------------------ */
-/* Files are parsed, validated and stored by the server's import       */
-/* service (the same one onboarding uses). This page uploads, shows    */
-/* the per-row summary and the import history.                         */
-/* ------------------------------------------------------------------ */
 
 type DatasetKey = ImportBatch['dataset']
 
@@ -59,6 +52,7 @@ export default function ImportData() {
   const afterImport = (batches: ImportBatch[]) => {
     setResults((prev) => [...batches, ...prev].slice(0, 12))
     store.invalidate('products', 'analytics', 'orders', 'mandate', 'suppliers', 'activity')
+    historyQ.reload()
     for (const b of batches) {
       const fn = b.duplicate ? toast.info : b.status === 'failed' ? toast.error : b.failed ? toast.warning : toast.success
       fn(b.duplicate ? 'Already imported' : b.status === 'failed' ? `${b.datasetLabel}: nothing imported` : `${b.datasetLabel} imported`, {
@@ -76,11 +70,9 @@ export default function ImportData() {
         const lower = file.name.toLowerCase()
         if (!lower.endsWith('.csv') && !lower.endsWith('.xlsx')) { toast.error(`${file.name}: upload CSV or XLSX files only`); continue }
         try {
-          // Filenames and sheet names choose the dataset; otherwise the selected card does.
-          const named = /product|inventory|catalog|sales|return|supplier|quote|logistic|courier|mandate/.test(lower)
-          afterImport(await uploadImport(file, { dataset: lower.endsWith('.csv') && !named ? target : undefined }))
+          afterImport(await uploadImport(file, { dataset: target }))
         } catch (e) {
-          toast.error(`${file.name} wasn’t imported`, { description: e instanceof ApiError ? e.message : undefined })
+          toast.error(`${file.name} failed`, { description: e instanceof Error ? e.message : 'Upload failed' })
         }
       }
     } finally {
@@ -88,86 +80,118 @@ export default function ImportData() {
     }
   }
 
-  const onDrop = (e: DragEvent) => {
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setDragOver(false)
-    if (e.dataTransfer.files.length) void handleFiles(e.dataTransfer.files)
+    if (e.dataTransfer.files?.length) void handleFiles(e.dataTransfer.files)
   }
 
   const sampleFile = (s: SlotDef) => {
     const rows = downloadSampleRows(s.sampleKey)
     const cols = Object.keys(rows[0] ?? {})
-    const esc = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)
+    const esc = (v: string) => (v.includes(',') || v.includes('"') || v.includes('\n') ? `"${v.replace(/"/g, '""')}"` : v)
     const text = [cols.join(','), ...rows.map((r) => cols.map((c) => esc(String(r[c] ?? ''))).join(','))].join('\n')
     return new File([text], s.label, { type: 'text/csv' })
   }
 
   const loadSamples = async () => {
-    // Real imports of the sample files, through the same service as any upload.
     await handleFiles(SLOTS.map(sampleFile))
   }
 
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title="Import Business Data"
-        subtitle="Upload CSV or Excel files. The server validates every row, saves the valid ones to your account and tells you exactly what was skipped."
+        subtitle="Upload your Indian e-commerce catalog, sales history, courier quotes, and supplier pricing to power autonomous recommendations."
         actions={
-          <Button variant="outline" size="sm" onClick={loadSamples} disabled={busy}>
-            <Play className="h-3.5 w-3.5" aria-hidden /> Import sample data for all
+          <Button variant="outline" size="sm" onClick={loadSamples} disabled={busy} className="rounded-full font-bold text-xs">
+            <Play className="h-3.5 w-3.5 mr-1" aria-hidden /> Import Sample Data for All
           </Button>
         }
       />
-      {historyQ.error && <div className="mb-4"><PanelError message={historyQ.error.message} onRetry={historyQ.reload} /></div>}
+      {historyQ.error && <PanelError message={historyQ.error.message} onRetry={historyQ.reload} />}
 
-      {/* Dataset slots: last stored import for each */}
-      <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {/* Dataset Slots */}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
         {SLOTS.map((s) => {
           const last = lastBy[s.key]
           return (
             <button
               key={s.key}
               onClick={() => setTarget(s.key)}
-              className={cx('rounded-xl border p-4 text-left transition-all', target === s.key ? 'border-brand/60 bg-brand/8' : 'border-border bg-card hover:border-brand/30')}
+              className={cx(
+                'card-surface p-5 text-left transition-all duration-200 cursor-pointer',
+                target === s.key
+                  ? 'border-[#7B2FE0] bg-[#BF8FFF]/15 dark:bg-[#7B2FE0]/20 ring-2 ring-[#7B2FE0]/25'
+                  : 'hover:border-[#7B2FE0]/50 hover:bg-[#F2F6F6]/60 dark:hover:bg-white/5',
+              )}
               aria-pressed={target === s.key}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <FileSpreadsheet className={cx('h-4.5 w-4.5', last ? 'text-success' : 'text-muted-foreground')} aria-hidden />
-                  <span className="text-sm font-medium">{s.label}</span>
+                  <div className={cx('flex h-8 w-8 items-center justify-center rounded-xl', last ? 'bg-[#14B8A0]/15 text-[#14B8A0]' : 'bg-[#DCEDEA] dark:bg-white/10 text-[#7B2FE0]')}>
+                    <FileSpreadsheet className="h-4 w-4" aria-hidden />
+                  </div>
+                  <span className="text-sm font-extrabold text-[#121A16] dark:text-white">{s.label}</span>
                 </div>
-                {last ? <StatusBadge label={`${formatNum(last.imported)} rows saved`} tone="success" /> : <StatusBadge label={s.key === 'products' ? 'Start here' : 'Optional'} tone="neutral" />}
+                {last ? (
+                  <StatusBadge label={`${formatNum(last.imported)} rows saved`} tone="success" />
+                ) : (
+                  <StatusBadge label={s.key === 'products' ? 'Start Here' : 'Optional'} tone="neutral" />
+                )}
               </div>
-              <p className="mt-1.5 text-xs text-muted-foreground">{s.desc}</p>
-              <p className="mt-2 font-mono text-[10px] text-muted-foreground/70">{s.cols.join(' · ')}{s.optional.length ? ` · (${s.optional.join(', ')})` : ''}</p>
-              {last && <p className="mt-1.5 text-[11px] text-muted-foreground">Last import {formatDateTime(last.createdAt)} · {last.fileName}</p>}
+              <p className="mt-2 text-xs font-medium text-[#3B4640] dark:text-muted-foreground">{s.desc}</p>
+              <p className="mt-2.5 font-mono text-[10px] text-[#3B4640]/70 dark:text-muted-foreground/70 truncate">
+                {s.cols.join(' · ')}{s.optional.length ? ` · (${s.optional.join(', ')})` : ''}
+              </p>
+              {last && (
+                <p className="mt-2 text-[11px] font-semibold text-[#14B8A0]">
+                  Last import {formatDateTime(last.createdAt)} · {last.fileName}
+                </p>
+              )}
             </button>
           )
         })}
       </div>
 
-      {/* Upload zone */}
-      <Card className="card-surface mb-5">
-        <CardContent className="p-5">
+      {/* Frosted Frame: File Upload Zone */}
+      <div className="frosted-frame">
+        <div className="card-surface p-6 hatch-tr">
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
             onDragLeave={() => setDragOver(false)}
             onDrop={onDrop}
-            className={cx('flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-10 text-center transition-colors', dragOver ? 'border-brand bg-brand/10' : 'border-border bg-secondary/30')}
+            className={cx(
+              'flex flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-12 text-center transition-all duration-200',
+              dragOver
+                ? 'border-[#7B2FE0] bg-[#BF8FFF]/15'
+                : 'border-[#C9D6D3] dark:border-white/15 bg-[#F2F6F6]/50 dark:bg-white/5',
+            )}
           >
-            {busy ? <Loader2 className="mb-3 h-7 w-7 animate-spin text-brand-soft" aria-hidden /> : <Upload className="mb-3 h-7 w-7 text-muted-foreground" aria-hidden />}
-            <p className="text-sm font-medium">{busy ? 'Importing…' : 'Drag & drop files here'}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Uploading to: <span className="font-medium text-brand-soft">{SLOTS.find((s) => s.key === target)?.label}</span> — filenames auto-match the right dataset.
-              One XLSX workbook with sheets named Products, Sales, Returns, Supplier Quotes, Logistics or Mandate works too.
+            {busy ? (
+              <Loader2 className="mb-3.5 h-8 w-8 animate-spin text-[#7B2FE0] dark:text-[#BF8FFF]" aria-hidden />
+            ) : (
+              <div className="mb-3.5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#DCEDEA] dark:bg-white/10 text-[#7B2FE0] dark:text-[#BF8FFF] shadow-xs">
+                <Upload className="h-6 w-6" aria-hidden />
+              </div>
+            )}
+            <p className="text-base font-extrabold text-[#121A16] dark:text-white">
+              {busy ? 'Validating and Importing Rows…' : 'Drag & drop business spreadsheets here'}
             </p>
-            <p className="mt-1 text-[11px] text-muted-foreground/70">CSV or XLSX · max 10 MB per file · re-uploading the same file changes nothing</p>
-            <div className="mt-4 flex gap-2">
-              <Button size="sm" className="btn-glow border-0 text-white" onClick={() => fileRef.current?.click()} disabled={busy}>
-                <Upload className="h-3.5 w-3.5" aria-hidden /> Browse files
+            <p className="mt-1.5 text-xs font-semibold text-[#3B4640] dark:text-muted-foreground max-w-lg">
+              Uploading to: <span className="text-[#7B2FE0] dark:text-[#BF8FFF] font-bold">{SLOTS.find((s) => s.key === target)?.label}</span> — or drop a multi-sheet XLSX file matching standard datasets.
+            </p>
+            <p className="mt-1 text-[11px] text-[#3B4640]/70 dark:text-muted-foreground/70">
+              CSV or XLSX format · Max 10 MB per file · Duplicate rows automatically reconciled
+            </p>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+              <Button size="sm" className="btn-glow border-0 text-white rounded-full px-5 py-2 font-bold" onClick={() => fileRef.current?.click()} disabled={busy}>
+                <Upload className="h-3.5 w-3.5 mr-1" aria-hidden /> Browse Files
               </Button>
               <Button
-                size="sm" variant="outline"
+                size="sm"
+                variant="outline"
+                className="rounded-full px-5 font-bold"
                 onClick={() => {
                   const s = SLOTS.find((x) => x.key === target)!
                   const rows = downloadSampleRows(s.sampleKey)
@@ -176,30 +200,51 @@ export default function ImportData() {
                   toast.success(`Sample ${s.label} downloaded`)
                 }}
               >
-                <Download className="h-3.5 w-3.5" aria-hidden /> Download sample
+                <Download className="h-3.5 w-3.5 mr-1" aria-hidden /> Download Sample {SLOTS.find((x) => x.key === target)?.label}
               </Button>
             </div>
-            <input ref={fileRef} type="file" accept=".csv,.xlsx" multiple className="sr-only" aria-label="Upload data files" onChange={(e) => { if (e.target.files) void handleFiles(e.target.files); e.target.value = '' }} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,.xlsx"
+              multiple
+              className="sr-only"
+              aria-label="Upload data files"
+              onChange={(e) => {
+                if (e.target.files) void handleFiles(e.target.files)
+                e.target.value = ''
+              }}
+            />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Results of this session's uploads */}
+      {/* Upload Results for current session */}
       {results.length > 0 && (
-        <Card className="card-surface mb-5">
+        <Card className="card-surface hatch-br overflow-hidden">
           <CardContent className="p-0">
-            <div className="border-b border-border px-5 py-3.5"><h2 className="text-sm font-semibold">Import results</h2></div>
-            <ul className="divide-y divide-border">
+            <div className="border-b border-[#C9D6D3]/60 dark:border-white/10 px-6 py-4">
+              <h2 className="text-sm font-extrabold text-[#121A16] dark:text-white">Import Session Results</h2>
+            </div>
+            <ul className="divide-y divide-[#C9D6D3]/40 dark:divide-white/5">
               {results.map((b) => (
-                <li key={`${b.id}-${b.duplicate}`} className="px-5 py-3.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      {b.status === 'failed' ? <FileWarning className="h-4 w-4 text-danger" aria-hidden /> : b.failed ? <AlertTriangle className="h-4 w-4 text-warning" aria-hidden /> : <Check className="h-4 w-4 text-success" aria-hidden />}
-                      <span className="text-sm font-medium">{b.fileName}{b.sheet ? ` · ${b.sheet}` : ''}</span>
-                      <span className="text-xs text-muted-foreground">→ {b.datasetLabel}</span>
+                <li key={`${b.id}-${b.duplicate}`} className="px-6 py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      {b.status === 'failed' ? (
+                        <FileWarning className="h-4 w-4 text-[#FF8A80]" aria-hidden />
+                      ) : b.failed ? (
+                        <AlertTriangle className="h-4 w-4 text-[#FF9A3D]" aria-hidden />
+                      ) : (
+                        <Check className="h-4 w-4 text-[#14B8A0]" aria-hidden />
+                      )}
+                      <span className="text-sm font-bold text-[#121A16] dark:text-white">{b.fileName}{b.sheet ? ` · ${b.sheet}` : ''}</span>
+                      <span className="text-xs text-[#3B4640] dark:text-muted-foreground">→ {b.datasetLabel}</span>
                     </div>
-                    <div className="flex flex-wrap gap-1.5 text-[11px]">
-                      {b.duplicate ? <StatusBadge label="Already imported" tone="neutral" /> : (
+                    <div className="flex flex-wrap gap-2 text-[11px]">
+                      {b.duplicate ? (
+                        <StatusBadge label="Already imported" tone="neutral" />
+                      ) : (
                         <>
                           <StatusBadge label={`${b.created} new`} tone="success" />
                           <StatusBadge label={`${b.updated} updated`} tone="info" />
@@ -210,9 +255,17 @@ export default function ImportData() {
                     </div>
                   </div>
                   {b.errors.length > 0 && !b.duplicate && (
-                    <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto rounded-lg border border-border bg-secondary/30 p-2.5">
-                      {b.errors.map((e, i) => <li key={i} className="text-[11px] text-danger">{e.row ? `Row ${e.row}: ` : ''}{e.message}</li>)}
-                      {b.failed > b.errors.length && <li className="text-[11px] text-muted-foreground">…and {b.failed - b.errors.length} more</li>}
+                    <ul className="mt-2.5 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-[#FF8A80]/30 bg-[#FF8A80]/10 p-3">
+                      {b.errors.map((e, i) => (
+                        <li key={i} className="text-[11px] font-medium text-[#FF8A80]">
+                          {e.row ? `Row ${e.row}: ` : ''}{e.message}
+                        </li>
+                      ))}
+                      {b.failed > b.errors.length && (
+                        <li className="text-[11px] text-[#3B4640] dark:text-muted-foreground">
+                          …and {b.failed - b.errors.length} more
+                        </li>
+                      )}
                     </ul>
                   )}
                 </li>
@@ -222,38 +275,59 @@ export default function ImportData() {
         </Card>
       )}
 
-      {/* History */}
-      <Card className="card-surface mb-5">
+      {/* Import History Table */}
+      <Card className="card-surface overflow-hidden hatch-br">
         <CardContent className="p-0">
-          <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-            <h2 className="text-sm font-semibold">Import history</h2>
-            <span className="text-xs text-muted-foreground">Stored with your account</span>
+          <div className="flex items-center justify-between border-b border-[#C9D6D3]/60 dark:border-white/10 px-6 py-4">
+            <h2 className="text-sm font-extrabold text-[#121A16] dark:text-white">Import History</h2>
+            <span className="text-xs font-semibold text-[#3B4640]/80 dark:text-muted-foreground">Persistently synced with seller account</span>
           </div>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="border-border hover:bg-transparent">
+                <TableRow className="border-b border-[#C9D6D3]/60 dark:border-white/10 hover:bg-transparent">
                   {['When', 'File', 'Dataset', 'From', 'Rows', 'New', 'Updated', 'Skipped', 'Status'].map((h) => (
-                    <TableHead key={h} className="whitespace-nowrap text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{h}</TableHead>
+                    <TableHead key={h} className="whitespace-nowrap text-[11px] font-bold uppercase tracking-wider text-[#3B4640]/80 dark:text-muted-foreground">
+                      {h}
+                    </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {history.map((b) => (
-                  <TableRow key={b.id} className="border-border">
-                    <TableCell className="tabular whitespace-nowrap text-muted-foreground">{formatDateTime(b.createdAt)}</TableCell>
-                    <TableCell className="max-w-56 truncate">{b.fileName}{b.sheet ? ` · ${b.sheet}` : ''}</TableCell>
-                    <TableCell className="whitespace-nowrap">{b.datasetLabel}</TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">{b.source === 'onboarding' ? 'Onboarding' : 'Import page'}</TableCell>
-                    <TableCell className="tabular">{formatNum(b.rowsTotal)}</TableCell>
-                    <TableCell className="tabular text-success">{formatNum(b.created)}</TableCell>
-                    <TableCell className="tabular">{formatNum(b.updated)}</TableCell>
-                    <TableCell className={cx('tabular', b.failed ? 'text-danger' : 'text-muted-foreground')}>{formatNum(b.failed)}</TableCell>
-                    <TableCell><StatusBadge label={b.status === 'completed' ? 'Saved' : 'Nothing saved'} tone={b.status === 'completed' ? (b.failed ? 'warning' : 'success') : 'danger'} /></TableCell>
+                  <TableRow key={b.id} className="border-b border-[#C9D6D3]/40 dark:border-white/5 hover:bg-[#F2F6F6]/50 dark:hover:bg-white/5">
+                    <TableCell className="tabular whitespace-nowrap text-xs font-semibold text-[#3B4640] dark:text-muted-foreground">
+                      {formatDateTime(b.createdAt)}
+                    </TableCell>
+                    <TableCell className="max-w-56 truncate text-xs font-bold text-[#121A16] dark:text-white">
+                      {b.fileName}{b.sheet ? ` · ${b.sheet}` : ''}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs font-semibold text-[#121A16] dark:text-white">
+                      {b.datasetLabel}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-xs text-[#3B4640] dark:text-muted-foreground">
+                      {b.source === 'onboarding' ? 'Onboarding' : 'Import page'}
+                    </TableCell>
+                    <TableCell className="tabular text-xs font-bold">{formatNum(b.rowsTotal)}</TableCell>
+                    <TableCell className="tabular text-xs font-bold text-[#14B8A0]">{formatNum(b.created)}</TableCell>
+                    <TableCell className="tabular text-xs font-bold text-[#23A6FF]">{formatNum(b.updated)}</TableCell>
+                    <TableCell className={cx('tabular text-xs font-bold', b.failed ? 'text-[#FF8A80]' : 'text-[#3B4640]/70 dark:text-muted-foreground')}>
+                      {formatNum(b.failed)}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge
+                        label={b.status === 'completed' ? 'Saved' : 'Failed'}
+                        tone={b.status === 'completed' ? (b.failed ? 'warning' : 'success') : 'danger'}
+                      />
+                    </TableCell>
                   </TableRow>
                 ))}
                 {historyQ.data && history.length === 0 && (
-                  <TableRow className="hover:bg-transparent"><TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">No imports yet.</TableCell></TableRow>
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={9} className="py-12 text-center text-xs font-semibold text-[#3B4640] dark:text-muted-foreground">
+                      No imports yet. Click "Import sample data for all" to load the complete demo suite.
+                    </TableCell>
+                  </TableRow>
                 )}
               </TableBody>
             </Table>
@@ -261,22 +335,27 @@ export default function ImportData() {
         </CardContent>
       </Card>
 
-      <Card className={cx('card-surface overflow-hidden', lastBy.products && 'border-success/40')}>
-        <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center">
-          <div className="flex flex-1 items-center gap-4">
-            <div className={cx('flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl', lastBy.products ? 'bg-success/15 text-success' : 'bg-secondary text-muted-foreground')}>
-              <Check className="h-5.5 w-5.5" aria-hidden />
+      {/* Completion Banner */}
+      <div className="card-surface p-6 hatch-tr">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className={cx('flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-md', lastBy.products ? 'bg-[#14B8A0] text-white' : 'bg-[#DCEDEA] text-[#3B4640]')}>
+              <Check className="h-6 w-6" aria-hidden />
             </div>
             <div>
-              <h2 className="text-base font-semibold">{importedCount} of {SLOTS.length} datasets imported</h2>
-              <p className="text-xs text-muted-foreground">Analytics, inventory, return risk and supplier recommendations read your imported data straight away.</p>
+              <h2 className="text-base font-extrabold text-[#121A16] dark:text-white">
+                {importedCount} of {SLOTS.length} datasets imported
+              </h2>
+              <p className="text-xs font-medium text-[#3B4640] dark:text-muted-foreground">
+                Inventory, pricing, return risk and supplier recommendation models read your imported data straight away.
+              </p>
             </div>
           </div>
-          <Button className="btn-glow border-0 text-white" onClick={() => navigate('/')}>
-            Open my dashboard <ArrowRight className="h-4 w-4" aria-hidden />
+          <Button className="btn-glow border-0 text-white rounded-full px-6 py-2.5 font-bold shadow-lg" onClick={() => navigate('/')}>
+            Open my dashboard <ArrowRight className="h-4 w-4 ml-1.5" aria-hidden />
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }

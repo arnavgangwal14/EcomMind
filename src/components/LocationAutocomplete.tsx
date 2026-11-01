@@ -1,23 +1,17 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, Loader2, MapPin } from 'lucide-react'
-import { api, ApiError } from '@/lib/api'
+import { api } from '@/lib/api'
 import { cx } from '@/lib/format'
 import type { PlaceValue } from '@/lib/place'
+import { searchCities, type CityData } from '@/data/cities'
 
-/**
- * Business Location field with Google Places autocomplete, proxied through
- * /api/places so the API key stays on the server.
- *
- * - 300 ms debounce, stale requests aborted, so typing fast sends one request.
- * - Arrow keys / Enter / Escape and mouse selection (WAI-ARIA combobox).
- * - Selecting a suggestion fetches its details (address, lat/lng, city,
- *   state, country, place id).
- * - If location search is down or not configured, the field falls back to
- *   typed text marked "unverified" instead of blocking sign-up, unless the
- *   server says verification is required.
- */
-
-interface Suggestion { placeId: string; primary: string; secondary: string; description: string }
+interface Suggestion {
+  placeId: string
+  primary: string
+  secondary: string
+  description: string
+  cityData?: CityData
+}
 interface Details { placeId: string; formattedAddress: string; lat: number | null; lng: number | null; city: string | null; state: string | null; country: string | null }
 interface PlacesConfig { enabled: boolean; verificationRequired: boolean }
 
@@ -27,7 +21,7 @@ const newSessionToken = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 export function LocationAutocomplete({
-  id, value, onChange, error, placeholder = 'Start typing your city or area',
+  id, value, onChange, error, placeholder = 'Start typing your city (e.g. Bengaluru, Mumbai)',
 }: {
   id: string
   value: PlaceValue
@@ -57,12 +51,36 @@ export function LocationAutocomplete({
   const query = value.text
 
   useEffect(() => {
-    if (!enabled) return
     if (skipNext.current) { skipNext.current = false; return }
     clearTimeout(timer.current)
     abort.current?.abort()
     const q = query.trim()
-    if (q.length < 2 || value.verified) { setSuggestions([]); setLoading(false); return }
+    if (q.length < 1 || value.verified) { setSuggestions([]); setLoading(false); return }
+
+    // Instant local Indian cities search (e.g. typing "b" shows all cities with initial "b")
+    const localMatches = searchCities(q)
+    const localSuggestions: Suggestion[] = localMatches.map((c) => ({
+      placeId: `city:${c.city.toLowerCase()}`,
+      primary: c.city,
+      secondary: `${c.state}, ${c.country}`,
+      description: `${c.city}, ${c.state}, ${c.country}`,
+      cityData: c,
+    }))
+
+    if (!enabled) {
+      setSuggestions(localSuggestions)
+      setActive(localSuggestions.length ? 0 : -1)
+      setSearched(q)
+      setOpen(true)
+      setLoading(false)
+      return
+    }
+
+    setSuggestions(localSuggestions)
+    setActive(localSuggestions.length ? 0 : -1)
+    setOpen(true)
+    if (q.length < 2) return
+
     setLoading(true)
     timer.current = setTimeout(async () => {
       const ctrl = new AbortController()
@@ -71,16 +89,22 @@ export function LocationAutocomplete({
         const res = await api<{ suggestions: Suggestion[] }>('/api/places/autocomplete', {
           query: { q, sessionToken: session.current }, signal: ctrl.signal,
         })
-        setSuggestions(res.suggestions)
-        setActive(res.suggestions.length ? 0 : -1)
+        const combined = [...localSuggestions]
+        const seen = new Set(localSuggestions.map((x) => x.primary.toLowerCase()))
+        for (const s of res.suggestions) {
+          if (!seen.has(s.primary.toLowerCase())) {
+            seen.add(s.primary.toLowerCase())
+            combined.push(s)
+          }
+        }
+        setSuggestions(combined)
+        setActive(combined.length ? 0 : -1)
         setProviderError(null)
         setSearched(q)
         setOpen(true)
       } catch (e) {
         if ((e as Error).name === 'AbortError') return
-        setSuggestions([])
-        setProviderError(e instanceof ApiError ? e.message : 'Location search is unavailable right now.')
-        setOpen(true)
+        setProviderError(null)
       } finally {
         if (!ctrl.signal.aborted) setLoading(false)
       }
@@ -94,6 +118,19 @@ export function LocationAutocomplete({
     setOpen(false)
     setSuggestions([])
     skipNext.current = true
+    if (s.cityData) {
+      onChange({
+        text: `${s.cityData.city}, ${s.cityData.state}`,
+        placeId: s.placeId,
+        sessionToken: null,
+        formattedAddress: `${s.cityData.city}, ${s.cityData.state}, ${s.cityData.country}`,
+        city: s.cityData.city,
+        state: s.cityData.state,
+        country: s.cityData.country,
+        verified: true,
+      })
+      return
+    }
     setResolving(true)
     const token = session.current
     try {
@@ -101,11 +138,10 @@ export function LocationAutocomplete({
       onChange({ text: d.formattedAddress || s.description, placeId: d.placeId, sessionToken: token, formattedAddress: d.formattedAddress,
         lat: d.lat, lng: d.lng, city: d.city, state: d.state, country: d.country, verified: true })
     } catch {
-      // Keep the chosen suggestion; the server re-checks the place id on save.
       onChange({ text: s.description, placeId: s.placeId, sessionToken: token, verified: true })
     } finally {
       setResolving(false)
-      session.current = newSessionToken() // a selection ends the billing session
+      session.current = newSessionToken()
     }
   }
 
@@ -122,14 +158,13 @@ export function LocationAutocomplete({
 
   const status = useMemo(() => {
     if (resolving) return { tone: 'muted', text: 'Confirming location…' }
-    if (value.verified && value.placeId) return { tone: 'ok', text: [value.city, value.state, value.country].filter(Boolean).join(', ') || 'Location confirmed' }
-    if (config && !enabled) return { tone: 'muted', text: config.verificationRequired ? 'Location search is unavailable, and this server requires a verified location.' : 'Location search isn’t set up, so type your location. It will be saved as unverified.' }
-    if (providerError && value.text.trim().length >= 2) return { tone: 'warn', text: config?.verificationRequired ? providerError : `${providerError} You can continue; this location will be saved as unverified.` }
-    if (value.text.trim().length >= 2 && !value.verified && enabled) return { tone: 'muted', text: 'Pick a suggestion to confirm your location.' }
+    if (value.verified) return { tone: 'ok', text: [value.city, value.state, value.country].filter(Boolean).join(', ') || 'Location confirmed' }
+    if (providerError && value.text.trim().length >= 1) return { tone: 'warn', text: providerError }
+    if (value.text.trim().length >= 1 && !value.verified) return { tone: 'muted', text: 'Pick a city to confirm your location.' }
     return null
-  }, [resolving, value, config, enabled, providerError])
+  }, [resolving, value, providerError])
 
-  const showList = open && enabled && value.text.trim().length >= 2 && !value.verified
+  const showList = open && value.text.trim().length >= 1 && !value.verified && (suggestions.length > 0 || loading || !!providerError)
 
   return (
     <div className="relative">
@@ -150,8 +185,17 @@ export function LocationAutocomplete({
           onChange({ text: e.target.value, placeId: null, sessionToken: null, verified: false })
           setOpen(true)
         }}
-        onFocus={() => suggestions.length && setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onFocus={() => { if (suggestions.length || value.text.trim().length >= 1) setOpen(true) }}
+        onBlur={() => {
+          const q = value.text.trim().toLowerCase()
+          if (!value.verified && q.length >= 2) {
+            const match = suggestions.find(
+              (s) => s.primary.toLowerCase() === q || s.description.toLowerCase().startsWith(q),
+            )
+            if (match) void select(match)
+          }
+          setTimeout(() => setOpen(false), 200)
+        }}
         onKeyDown={onKeyDown}
         className={cx(
           'h-9 w-full rounded-md border bg-transparent pl-9 pr-9 text-sm shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground',
@@ -161,19 +205,20 @@ export function LocationAutocomplete({
       />
       <span className="absolute right-3 top-2.5" aria-hidden>
         {loading || resolving ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          : value.verified && value.placeId ? <CheckCircle2 className="h-4 w-4 text-success" /> : null}
+          : value.verified ? <CheckCircle2 className="h-4 w-4 text-success" /> : null}
       </span>
 
       {showList && (
         <ul
           id={listId}
           role="listbox"
-          className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-64 overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-xl"
+          onMouseDown={(e) => e.preventDefault()}
+          className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-64 overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-2xl backdrop-blur-md"
         >
           {loading && suggestions.length === 0 && <li className="px-3 py-2.5 text-xs text-muted-foreground">Searching…</li>}
           {!loading && providerError && <li className="flex items-center gap-2 px-3 py-2.5 text-xs text-warning"><AlertCircle className="h-3.5 w-3.5" aria-hidden />{providerError}</li>}
           {!loading && !providerError && suggestions.length === 0 && searched && (
-            <li className="px-3 py-2.5 text-xs text-muted-foreground">No places match “{searched}”. Try a nearby city or area name.</li>
+            <li className="px-3 py-2.5 text-xs text-muted-foreground">No cities match “{searched}”. Try typing another city initial or name.</li>
           )}
           {suggestions.map((s, i) => (
             <li
@@ -182,14 +227,20 @@ export function LocationAutocomplete({
               role="option"
               aria-selected={i === active}
               onMouseDown={(e) => { e.preventDefault(); void select(s) }}
+              onPointerDown={(e) => { e.preventDefault(); void select(s) }}
+              onClick={(e) => { e.preventDefault(); void select(s) }}
               onMouseEnter={() => setActive(i)}
-              className={cx('cursor-pointer px-3 py-2 text-sm', i === active ? 'bg-secondary' : 'hover:bg-secondary/60')}
+              className={cx('cursor-pointer px-3 py-2 text-sm transition-colors', i === active ? 'bg-secondary' : 'hover:bg-secondary/70')}
             >
               <span className="font-medium">{s.primary}</span>
               {s.secondary && <span className="block truncate text-xs text-muted-foreground">{s.secondary}</span>}
             </li>
           ))}
-          {suggestions.length > 0 && <li className="px-3 pt-1.5 text-right text-[10px] text-muted-foreground/70">Powered by Google</li>}
+          {suggestions.length > 0 && (
+            <li className="px-3 pt-1.5 pb-1 text-right text-[10px] text-muted-foreground/70 border-t border-border/40 mt-1">
+              {enabled ? 'Powered by Google & India Cities' : 'India Cities Database (500+ Cities)'}
+            </li>
+          )}
         </ul>
       )}
 

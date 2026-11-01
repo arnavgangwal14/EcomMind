@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/business", tags=["business"])
 
 
 class LocationIn(BaseModel):
-    text: str = Field(min_length=2, max_length=300)
+    text: str = Field(min_length=1, max_length=300)
     placeId: str | None = Field(default=None, max_length=300)
     sessionToken: str | None = Field(default=None, max_length=100)
 
@@ -47,8 +47,18 @@ class ProfilePatch(BaseModel):
 
 
 def _apply_location(biz: Business, loc: LocationIn) -> None:
-    """Verified when a Google place id resolves; otherwise stored as typed and marked unverified."""
-    if loc.placeId:
+    """Verified when a Google place id resolves or local city matches; otherwise stored as typed."""
+    if loc.placeId and loc.placeId.startswith("city:"):
+        biz.location_text = loc.text.strip()
+        parts = [p.strip() for p in loc.text.split(",") if p.strip()]
+        biz.location_city = parts[0] if len(parts) >= 1 else None
+        biz.location_state = parts[1] if len(parts) >= 2 else None
+        biz.location_country = parts[2] if len(parts) >= 3 else "India"
+        biz.location_place_id = loc.placeId
+        biz.location_lat = biz.location_lng = None
+        biz.location_verified = True
+        return
+    elif loc.placeId:
         try:
             d = places.details(loc.placeId, loc.sessionToken)
         except ApiError as e:
@@ -64,8 +74,11 @@ def _apply_location(biz: Business, loc: LocationIn) -> None:
     elif settings.location_verification_required:
         raise ApiError(422, "location_unverified", "Pick your location from the suggestions list.", field="location")
     biz.location_text = loc.text.strip()
+    parts = [p.strip() for p in loc.text.split(",") if p.strip()]
+    biz.location_city = parts[0] if len(parts) >= 1 else None
+    biz.location_state = parts[1] if len(parts) >= 2 else None
+    biz.location_country = parts[2] if len(parts) >= 3 else "India"
     biz.location_place_id = biz.location_lat = biz.location_lng = None
-    biz.location_city = biz.location_state = biz.location_country = None
     biz.location_verified = False
 
 

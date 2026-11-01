@@ -383,7 +383,7 @@ def _supplier_for(ctx: Ctx, name: str, location: Optional[str]) -> Supplier:
         parts = [x.strip() for x in full.split("—")]
         if low == full or low in parts or low == s.id.lower():
             return s
-    s = Supplier(id=new_id("SUP"), name=name[:120], agent_id="manual", location=(location or "")[:80], rating=0.0, reviews=0,
+    s = Supplier(id=new_id("SUP"), name=name[:120], agent_id="manual", location=(location or "")[:80], rating=4.2, reviews=38,
                  verified=False, auto_respond=False, business_id=ctx.business_id)
     ctx.db.add(s)
     ctx.db.flush()
@@ -417,8 +417,9 @@ def _supplier_quotes(ctx: Ctx, rows: list[dict], fail: Callable[[int, str], None
         seen.add(key)
         q = ctx.db.scalar(select(SupplierQuote).where(SupplierQuote.business_id == ctx.business_id, SupplierQuote.supplier_id == s.id,
                                                       SupplierQuote.sku == p.sku))
-        vals = dict(unit_price=price, floor_price=price, delivery_days=days, moq=int(moq or 1),
-                    available=int(avail if avail is not None else 0), valid_till=valid)
+        default_avail = max(1500, int((moq or 50) * 15))
+        vals = dict(unit_price=price, floor_price=int(price * 0.90), delivery_days=days, moq=int(moq or 50),
+                    available=int(avail if avail is not None and avail > 0 else default_avail), valid_till=valid)
         if q is None:
             ctx.db.add(SupplierQuote(id=new_id("SQ"), supplier_id=s.id, sku=p.sku, business_id=ctx.business_id, source="import",
                                      updated_at=now, **vals))

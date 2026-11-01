@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { BrainCircuit, Loader2, RefreshCw, TrendingUp, BarChart3, ShieldAlert, Truck, MapPin, AlertTriangle } from 'lucide-react'
+import { Loader2, RefreshCw, TrendingUp, BarChart3, ShieldAlert, Truck, MapPin, AlertTriangle } from 'lucide-react'
+import { EcomMindLogoMark } from '@/components/brand/EcomMindLogo'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useApp } from '@/store/AppContext'
 import { useApiQuery, useDataStore } from '@/store/DataStore'
@@ -72,8 +73,8 @@ export default function Insights() {
         <div className="h-0.5 w-full bg-gradient-to-r from-brand-soft via-brand to-[#5f8bff]" aria-hidden />
         <CardContent className="flex flex-col gap-4 p-5 md:flex-row md:items-center">
           <div className="flex flex-1 items-center gap-4">
-            <div className="btn-glow flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl">
-              <BrainCircuit className="h-5.5 w-5.5 text-white" aria-hidden />
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white dark:bg-white/10 p-1.5 shadow-sm border border-[#C9D6D3]/60 dark:border-white/10">
+              <EcomMindLogoMark className="h-8 w-8" />
             </div>
             <div>
               <h2 className="text-base font-semibold">Business analysis</h2>
