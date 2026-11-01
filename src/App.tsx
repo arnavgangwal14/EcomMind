@@ -70,7 +70,9 @@ function RootRoute() {
     if (!auth.onboarded) return <Navigate to="/onboarding" replace />
     return (
       <AppLayout>
-        <Overview />
+        <ErrorBoundary>
+          <Overview />
+        </ErrorBoundary>
       </AppLayout>
     )
   }

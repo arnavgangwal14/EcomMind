@@ -51,28 +51,49 @@ export function useCommerce({ catalog, addActivity, pauseAgents, enabled }: Comm
   const pricingRules = useMemo<PricingRuleConfig>(() => {
     const m = mandateQ.data?.mandate
     if (!m) return DEFAULT_PRICING_RULES
-    return { mode: m.pricingMode, minGrossMarginPct: m.minGrossMarginPct, maxDiscountPct: m.maxDiscountPct,
-      maxPriceChangePct: m.maxPriceChangePct, enabled: !m.agentsPaused, autoApproveWithinBand: m.pricingMode === 'autonomous' }
+    return {
+      mode: m.pricingMode ?? 'autonomous',
+      minGrossMarginPct: m.minGrossMarginPct ?? 22,
+      maxDiscountPct: m.maxDiscountPct ?? 20,
+      maxPriceChangePct: m.maxPriceChangePct ?? 15,
+      enabled: !m.agentsPaused,
+      autoApproveWithinBand: m.pricingMode === 'autonomous',
+    }
   }, [mandateQ.data])
   const priceHistory = useMemo<PriceChangeLog[]>(() => (historyQ.data?.changes ?? []).map((c) => {
     const p = catalog.find((x) => x.sku === c.sku)
-    const monthly = Math.round(rupees(c.newPrice - c.oldPrice) * (p?.avgDailySales ?? 0) * 30)
+    const monthly = Math.round(rupees((c.newPrice ?? 0) - (c.oldPrice ?? 0)) * (p?.avgDailySales ?? 0) * 30)
     return {
-      id: c.id, timestamp: c.createdAt, sku: c.sku, productName: c.productName, oldPrice: rupees(c.oldPrice), newPrice: rupees(c.newPrice),
-      pctChange: c.pctChange, agentResponsible: c.actor, reason: c.reason, status: c.sellerOverride ? 'approved' : 'executed',
+      id: c.id,
+      timestamp: c.createdAt || new Date().toISOString(),
+      sku: c.sku,
+      productName: c.productName || p?.name || c.sku,
+      oldPrice: rupees(c.oldPrice ?? 0),
+      newPrice: rupees(c.newPrice ?? 0),
+      pctChange: c.pctChange ?? 0,
+      agentResponsible: c.actor || 'EcomMind Agent',
+      reason: c.reason || 'Market dynamic adjustment',
+      status: c.sellerOverride ? 'approved' : 'executed',
       expectedProfitImpact: `${monthly >= 0 ? '+' : '−'}₹${Math.abs(monthly).toLocaleString('en-IN')}/month`,
-      safeguardsChecked: { minMarginMet: c.safeguards.minMarginMet, maxDiscountMet: c.safeguards.maxDiscountMet, maxChangeMet: c.safeguards.maxChangeMet, commissionsIncluded: false },
-      marginPct: c.marginPct, sellerOverride: c.sellerOverride, source: c.source,
+      safeguardsChecked: {
+        minMarginMet: c.safeguards?.minMarginMet ?? true,
+        maxDiscountMet: c.safeguards?.maxDiscountMet ?? true,
+        maxChangeMet: c.safeguards?.maxChangeMet ?? true,
+        commissionsIncluded: false,
+      },
+      marginPct: c.marginPct ?? 30,
+      sellerOverride: !!c.sellerOverride,
+      source: c.source || 'agent',
     }
   }), [historyQ.data, catalog])
-  const [festivalEvents, setFestivalEvents] = useState<FestivalEvent[]>(seedFestivalCalendar())
+  const [festivalEvents, setFestivalEvents] = useState<FestivalEvent[]>(() => seedFestivalCalendar() ?? [])
 
   const [supplierPurchases, setSupplierPurchases] = useState<SupplierPurchaseRecord[]>([])
   const [supplierDeliveries, setSupplierDeliveries] = useState<SupplierDeliveryRecord[]>([])
   const [supplierRelationships, setSupplierRelationships] = useState<Record<string, SupplierRelationshipRecord>>({})
 
   // Autonomy level lives in the mandate; the approval queue lives on the server.
-  const autonomyLevel = (mandateQ.data?.mandate.autonomyLevel ?? 2) as AutonomyLevel
+  const autonomyLevel = (mandateQ.data?.mandate?.autonomyLevel ?? 2) as AutonomyLevel
   const [signedMandate, setSignedMandate] = useState<SignedMandate>(INITIAL_SIGNED_MANDATE)
   const approvalsQ = useApiQuery<{ approvals: ApiApproval[]; pendingCount: number }>(enabled ? '/api/approvals?limit=200' : null, ['approvals'])
   const approvalQueue = useMemo<ApprovalQueueItem[]>(() => (approvalsQ.data?.approvals ?? []).map((a) => {
@@ -81,11 +102,21 @@ export function useCommerce({ catalog, addActivity, pauseAgents, enabled }: Comm
       if (v === null || typeof v === 'object') continue
       details[k] = /price|amount|total/i.test(k) && typeof v === 'number' ? `₹${rupees(v).toLocaleString('en-IN')}` : v
     }
-    if (a.reasons.length) details.needsApprovalBecause = a.reasons.join(', ')
+    if ((a.reasons?.length ?? 0) > 0) details.needsApprovalBecause = a.reasons.join(', ')
     return {
-      id: a.id, createdAt: a.createdAt, agentName: a.agentName, actionType: a.actionType, title: a.title, description: a.description,
-      details, financialImpact: rupees(a.financialImpact), status: a.status, reviewedAt: a.decidedAt ?? undefined,
-      reviewedBy: a.decidedBy ?? undefined, rejectionReason: a.rejectionReason ?? undefined, lastError: a.lastError ?? undefined,
+      id: a.id,
+      createdAt: a.createdAt || new Date().toISOString(),
+      agentName: a.agentName || 'EcomMind Agent',
+      actionType: a.actionType,
+      title: a.title,
+      description: a.description,
+      details,
+      financialImpact: rupees(a.financialImpact ?? 0),
+      status: a.status,
+      reviewedAt: a.decidedAt ?? undefined,
+      reviewedBy: a.decidedBy ?? undefined,
+      rejectionReason: a.rejectionReason ?? undefined,
+      lastError: a.lastError ?? undefined,
     }
   }), [approvalsQ.data])
 

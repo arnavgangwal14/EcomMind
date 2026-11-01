@@ -179,11 +179,11 @@ export default function Insights() {
             </div>
             <div className="mt-3 space-y-2">
               {(returns.data?.highRisk ?? []).map((r) => (
-                <div key={r.pincode + r.sku} className="flex items-center gap-2.5 rounded-lg border border-danger/30 bg-danger/8 px-3 py-2">
+                <div key={`${r.pincode}-${r.sku}`} className="flex items-center gap-2.5 rounded-lg border border-danger/30 bg-danger/8 px-3 py-2">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-danger" aria-hidden />
                   <p className="text-xs">
                     <span className="font-semibold text-danger">{r.city} {r.pincode}</span>
-                    <span className="text-muted-foreground"> — {r.productName} returns at {(r.returnRate * 100).toFixed(0)}% ({r.returns}/{r.orders} orders)</span>
+                    <span className="text-muted-foreground"> — {r.productName || r.sku} returns at {((r.returnRate ?? 0) * 100).toFixed(0)}% ({r.returns ?? 0}/{r.orders ?? 0} orders)</span>
                   </p>
                 </div>
               ))}

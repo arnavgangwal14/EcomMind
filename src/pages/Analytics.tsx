@@ -32,7 +32,7 @@ export default function Analytics() {
 
   const categories = ['All', ...new Set((products.data?.products ?? []).map((p) => p.category))]
 
-  if (!demoLoaded && products.data && products.data.products.length === 0) {
+  if (!demoLoaded && products.data && (products.data.products?.length ?? 0) === 0) {
     return (
       <>
         <PageHeader title="Sales Analytics" subtitle="Revenue, orders, margin and product performance." />

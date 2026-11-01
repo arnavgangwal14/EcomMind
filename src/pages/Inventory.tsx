@@ -47,7 +47,9 @@ export default function Inventory() {
 
   const filtered = useMemo(() => allProducts.filter((p) => {
     const q = search.trim().toLowerCase()
-    if (q && !p.name.toLowerCase().includes(q) && !p.sku.toLowerCase().includes(q)) return false
+    const name = (p.name || '').toLowerCase()
+    const sku = (p.sku || '').toLowerCase()
+    if (q && !name.includes(q) && !sku.includes(q)) return false
     if (category !== 'All' && p.category !== category) return false
     if (status !== 'All' && p.status !== status) return false
     return true

@@ -7,6 +7,7 @@ import { AppHeader } from './AppHeader'
 import { cx } from '@/lib/format'
 import { ArrowUpRight, Sparkles, X } from 'lucide-react'
 import { useExploreModal } from '@/components/ExploreModal'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 
 export default function AppLayout({ children }: { children?: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
@@ -58,7 +59,9 @@ export default function AppLayout({ children }: { children?: ReactNode }) {
           >
             <AppHeader />
             <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-8 md:px-8">
-              {children ?? <Outlet />}
+              <ErrorBoundary>
+                {children ?? <Outlet />}
+              </ErrorBoundary>
             </main>
             <footer className="border-t border-[#C9D6D3]/60 dark:border-white/10 px-6 py-6 text-center text-xs text-[#3B4640] dark:text-muted-foreground">
               <div className="mx-auto max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-3">

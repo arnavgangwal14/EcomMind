@@ -37,8 +37,8 @@ export default function Overview() {
   const mandate = useApiQuery<{ mandate: ApiMandate }>('/api/mandate', ['mandate'])
 
   const channelsQ = useApiQuery<{ marketplaces: { id: string; listings: number }[] }>('/api/marketplaces', ['orders', 'products'])
-  const listedChannels = (channelsQ.data?.marketplaces ?? []).filter((m) => m.listings > 0).length
-  const nextFestival = festivalEvents.find((f) => f.status !== 'Completed')
+  const listedChannels = (channelsQ.data?.marketplaces ?? []).filter((m) => (m.listings ?? 0) > 0).length
+  const nextFestival = (festivalEvents || []).find((f) => f && f.status !== 'Completed')
   const hasData = (summary.data?.productCount ?? 0) > 0
 
   if (!demoLoaded && summary.data && !hasData) {
@@ -66,8 +66,8 @@ export default function Overview() {
   const rev = signedDelta(s?.deltas?.revenue)
   const ord = signedDelta(s?.deltas?.orders)
   const prof = signedDelta(s?.deltas?.profit)
-  const chartData = (daily.data?.series ?? []).map((d) => ({ ...d, label: shortDate(d.date), revenueRs: d.revenue / 100 }))
-  const stockData = (inventory.data?.products ?? []).map((p) => ({ ...p, short: p.name.replace('Insulated ', '').replace('Wireless ', '') }))
+  const chartData = (daily.data?.series ?? []).map((d) => ({ ...d, label: shortDate(d.date), revenueRs: (d.revenue ?? 0) / 100 }))
+  const stockData = (inventory.data?.products ?? []).map((p) => ({ ...p, short: (p.name || p.sku || 'Product').replace('Insulated ', '').replace('Wireless ', '') }))
   const daily_ = mandate.data?.mandate?.dailyBudget ?? s?.budget?.daily ?? 0
   const consumed = s?.budget?.consumedToday ?? 0
 
@@ -87,7 +87,7 @@ export default function Overview() {
             Smarter E-Commerce. <span className="text-gradient">Stronger Business.</span>
           </h1>
           <p className="text-sm md:text-base font-medium text-[#3B4640] dark:text-muted-foreground leading-relaxed">
-            {greeting()}, {auth.sellerName.split(' ')[0] || 'Seller'}. EcomMind autonomous agents are continuously discovering suppliers, evaluating RTO pincode risk, and optimizing margins across your catalogs.
+            {greeting()}, {(auth?.sellerName || 'Seller').split(' ')[0] || 'Seller'}. EcomMind autonomous agents are continuously discovering suppliers, evaluating RTO pincode risk, and optimizing margins across your catalogs.
           </p>
         </div>
 
@@ -309,7 +309,7 @@ export default function Overview() {
             </Link>
           </div>
           {recs.error && <PanelError message={recs.error.message} onRetry={recs.reload} />}
-          {recs.data && recs.data.recommendations.length === 0 && (
+          {recs.data && (recs.data.recommendations?.length ?? 0) === 0 && (
             <p className="rounded-2xl border border-dashed border-[#C9D6D3] px-4 py-8 text-center text-xs font-semibold text-[#3B4640] dark:text-muted-foreground">
               No immediate risks: stock levels, courier returns and supplier margins are currently optimal.
             </p>

@@ -104,7 +104,9 @@ export default function Selling() {
     const q = search.trim().toLowerCase()
     return marketplaceListings.filter((l) => {
       if (channelFilter !== 'All' && l.channel !== channelFilter) return false
-      if (q && !l.title.toLowerCase().includes(q) && !l.sku.toLowerCase().includes(q)) return false
+      const title = (l.title || l.productName || l.sku || '').toLowerCase()
+      const sku = (l.sku || '').toLowerCase()
+      if (q && !title.includes(q) && !sku.includes(q)) return false
       return true
     })
   }, [marketplaceListings, channelFilter, search])
@@ -286,9 +288,9 @@ export default function Selling() {
                 </Badge>
               </div>
               <div className="pt-1">
-                <p className="tabular text-base font-bold text-foreground">{money(m.revenue)}</p>
+                <p className="tabular text-base font-bold text-foreground">{money(m.revenue ?? 0)}</p>
                 <p className="text-[10px] text-muted-foreground">
-                  {m.listings} listings · {m.commissionPct}% commission{m.pendingOrders ? ` · ${m.pendingOrders} open orders` : ''}
+                  {m.listings ?? 0} listings · {m.commissionPct ?? 0}% commission{m.pendingOrders ? ` · ${m.pendingOrders} open orders` : ''}
                 </p>
               </div>
             </CardContent>
@@ -370,7 +372,7 @@ export default function Selling() {
                     <TableCell className="tabular font-semibold text-xs text-success whitespace-nowrap">{money(l.revenue)}</TableCell>
                     <TableCell className="whitespace-nowrap">
                       <Badge variant="outline" className={cx('text-[10px]', l.status === 'active' ? 'text-success border-success/30' : l.status === 'out_of_stock' ? 'text-danger border-danger/30' : 'text-muted-foreground')}>
-                        {l.status.replace(/_/g, ' ')}
+                        {(l.status || 'active').replace(/_/g, ' ')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap">

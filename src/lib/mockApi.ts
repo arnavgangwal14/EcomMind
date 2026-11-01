@@ -556,10 +556,10 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
   if (cleanPath === '/api/marketplaces') {
     return {
       marketplaces: [
-        { id: 'amazon', name: 'Amazon India', listings: 14, connected: true, status: 'Active' },
-        { id: 'flipkart', name: 'Flipkart', listings: 9, connected: true, status: 'Active' },
-        { id: 'meesho', name: 'Meesho', listings: 5, connected: true, status: 'Active' },
-        { id: 'shopify', name: 'Shopify Store', listings: 12, connected: true, status: 'Active' },
+        { id: 'amazon', name: 'Amazon India', channel: 'amazon', channelName: 'Amazon India', listings: 14, revenue: 8420000, commissionPct: 15, pendingOrders: 2, connection: 'connected', connectionNote: 'Syncing live', status: 'Active' },
+        { id: 'flipkart', name: 'Flipkart', channel: 'flipkart', channelName: 'Flipkart', listings: 9, revenue: 5120000, commissionPct: 13.5, pendingOrders: 1, connection: 'connected', connectionNote: 'Syncing live', status: 'Active' },
+        { id: 'meesho', name: 'Meesho', channel: 'meesho', channelName: 'Meesho', listings: 5, revenue: 1284000, commissionPct: 0, pendingOrders: 0, connection: 'connected', connectionNote: 'Syncing live', status: 'Active' },
+        { id: 'shopify', name: 'Shopify Store', channel: 'shopify', channelName: 'Shopify Storefront', listings: 12, revenue: 4200000, commissionPct: 2.5, pendingOrders: 0, connection: 'connected', connectionNote: 'Syncing live', status: 'Active' },
       ],
     } as T
   }
@@ -568,10 +568,13 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
     return {
       orders: [],
       summary: {
-        totalOrders: 1420,
-        revenue: 148240000,
-        returns: 114,
-        averageValue: 104400,
+        orders: 1420,
+        units: 1850,
+        grossRevenue: 148240000,
+        commission: 19400000,
+        unitsDelivered: 1720,
+        netProfit: 47436800,
+        netMarginPct: 32.0,
       },
     } as T
   }
@@ -579,8 +582,38 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
   if (cleanPath === '/api/listings') {
     const prods = getUserProducts()
     const listings = prods.flatMap((p, idx) => [
-      { id: `lst_amz_${p.sku}`, sku: p.sku, name: p.name, marketplace: 'Amazon India', status: 'Active', price: p.price, stock: p.stock },
-      { id: `lst_fk_${p.sku}`, sku: p.sku, name: p.name, marketplace: 'Flipkart', status: idx % 2 === 0 ? 'Active' : 'Draft', price: p.price, stock: p.stock },
+      {
+        id: `lst_amz_${p.sku}`,
+        channel: 'amazon',
+        channelName: 'Amazon India',
+        sku: p.sku,
+        productName: p.name,
+        title: p.name,
+        price: p.price,
+        mrp: Math.round(p.price * 1.25),
+        stock: p.stock,
+        status: p.stock === 0 ? 'out_of_stock' : 'active',
+        listingStatus: 'active',
+        ordersCount: Math.max(10, Math.round(p.avgDailySales * 18)),
+        unitsSold: Math.max(12, Math.round(p.avgDailySales * 22)),
+        revenue: Math.max(12, Math.round(p.avgDailySales * 22)) * p.price,
+      },
+      {
+        id: `lst_fk_${p.sku}`,
+        channel: 'flipkart',
+        channelName: 'Flipkart',
+        sku: p.sku,
+        productName: p.name,
+        title: p.name,
+        price: Math.round(p.price * 0.98),
+        mrp: Math.round(p.price * 1.25),
+        stock: p.stock,
+        status: p.stock === 0 ? 'out_of_stock' : idx % 3 === 0 ? 'paused' : 'active',
+        listingStatus: idx % 3 === 0 ? 'paused' : 'active',
+        ordersCount: Math.max(6, Math.round(p.avgDailySales * 10)),
+        unitsSold: Math.max(8, Math.round(p.avgDailySales * 12)),
+        revenue: Math.max(8, Math.round(p.avgDailySales * 12)) * Math.round(p.price * 0.98),
+      },
     ])
     return { listings } as T
   }
@@ -588,16 +621,21 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
   if (cleanPath === '/api/stock-movements') {
     const prods = getUserProducts()
     const movements = prods.slice(0, 8).map((p, i) => ({
-      id: `mov_${i + 1}`,
+      id: i + 1,
       sku: p.sku,
       productName: p.name,
-      type: i % 2 === 0 ? 'outflow' : 'inflow',
-      quantity: 12 + i * 4,
-      channel: 'Amazon India',
-      timestamp: new Date(Date.now() - i * 3600000 * 5).toISOString(),
-      balanceAfter: p.stock,
+      delta: i % 2 === 0 ? -(12 + i * 2) : 25 + i * 5,
+      resultingStock: p.stock,
+      kind: i % 2 === 0 ? 'sale' : 'restock',
+      channel: i % 2 === 0 ? 'Amazon India' : null,
+      reason: i % 2 === 0 ? 'Order fulfilment' : 'Supplier delivery milestone released',
+      createdAt: new Date(Date.now() - i * 3600000 * 5).toISOString(),
     }))
     return { movements } as T
+  }
+
+  if (cleanPath === '/api/price-history') {
+    return { changes: [] } as T
   }
 
   if (cleanPath === '/api/approvals') {
