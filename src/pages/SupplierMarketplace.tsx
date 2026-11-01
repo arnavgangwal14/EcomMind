@@ -98,14 +98,18 @@ export default function SupplierMarketplace() {
           deliveryLocation: draft.location.trim(), deliveryDays: Number(draft.days),
         },
       })
-      store.setData(`/api/negotiations/${res.negotiation.id}`, res.negotiation)
-      store.invalidate('negotiations', 'activity')
-      toast.success(`Quotation requested from ${res.rfq.supplierName.split('—')[0].trim()}`, { description: `${res.rfq.id} · ${res.negotiation.statusLabel}` })
-      setDraft(null)
-      navigate(`/negotiations/${res.negotiation.id}`)
+      if (res?.negotiation?.id) {
+        store.setData(`/api/negotiations/${res.negotiation.id}`, res.negotiation)
+        store.invalidate('negotiations', 'activity')
+        const sName = res.rfq?.supplierName ? res.rfq.supplierName.split('—')[0].trim() : 'Supplier'
+        toast.success(`Quotation requested from ${sName}`, { description: `${res.rfq?.id || 'RFQ'} · ${res.negotiation?.statusLabel || 'Negotiation opened'}` })
+        setDraft(null)
+        navigate(`/negotiations/${res.negotiation.id}`)
+      } else {
+        throw new Error('Could not initiate negotiation. Please try again.')
+      }
     } catch (e) {
-      // Stay on this page: nothing was created (or the same RFQ will be returned on retry).
-      setRfqError(e instanceof ApiError ? e.message : 'Couldn’t send the quotation request.')
+      setRfqError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'Couldn’t send the quotation request.')
     } finally {
       setSending(false)
     }

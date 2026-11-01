@@ -7,8 +7,86 @@
  */
 
 import { SUPPLIERS, LOGISTICS_QUOTES, SERVICE_AGENTS, SEED_ACTIVITY } from '@/data/demo'
-import type { MeResponse, ApiProduct, ApiMandate, ApiEvent } from './api'
+import type { MeResponse, ApiProduct, ApiMandate, ApiEvent, ApiRFQ, ApiNegotiation, ApiNegotiationMessage } from './api'
 import { getUserProducts, saveUserProducts, getStoredImportBatches } from './clientImport'
+
+function getInitialNegotiations(): ApiNegotiation[] {
+  return [
+    {
+      id: 'neg-101',
+      rfqId: 'rfq-101',
+      supplierId: 'sup-1',
+      supplierName: 'Apex Traders (agent-sup-1)',
+      sku: 'EAR-001',
+      productName: 'Noise-Cancelling Earbuds Pro',
+      quantity: 150,
+      status: 'agreed',
+      statusLabel: 'Deal agreed',
+      latestSupplierPrice: 68000,
+      latestBuyerPrice: 68000,
+      agreedUnitPrice: 68000,
+      supplierDeliveryDays: 4,
+      rounds: 3,
+      createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
+      updatedAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+      rfq: {
+        id: 'rfq-101',
+        supplierId: 'sup-1',
+        supplierName: 'Apex Traders (agent-sup-1)',
+        sku: 'EAR-001',
+        productName: 'Noise-Cancelling Earbuds Pro',
+        quantity: 150,
+        targetUnitPrice: 65000,
+        deliveryLocation: 'Bhiwandi Fulfillment Hub, Maharashtra',
+        deliveryDays: 5,
+        status: 'agreed',
+        statusLabel: 'Deal agreed',
+        createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
+      },
+      messages: [
+        {
+          id: 1,
+          sender: 'ecommind',
+          kind: 'rfq',
+          unitPrice: 65000,
+          text: 'RFQ submitted for 150 units of Noise-Cancelling Earbuds Pro. Target unit price ₹650.00 with 5-day delivery to Bhiwandi.',
+          createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
+        },
+        {
+          id: 2,
+          sender: 'supplier',
+          kind: 'offer',
+          unitPrice: 72000,
+          text: 'Apex Traders Agent countered at ₹720.00/unit based on component supply availability.',
+          createdAt: new Date(Date.now() - 3600000 * 20).toISOString(),
+        },
+        {
+          id: 3,
+          sender: 'ecommind',
+          kind: 'counter',
+          unitPrice: 68000,
+          text: 'EcomMind autonomous counter-offer: ₹680.00/unit with volume commitment and immediate 50% milestone escrow release.',
+          createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
+        },
+        {
+          id: 4,
+          sender: 'supplier',
+          kind: 'accept',
+          unitPrice: 68000,
+          text: 'Offer accepted at ₹680.00/unit! Delivery scheduled within 4 business days.',
+          createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+        },
+      ],
+      escrow: {
+        id: 'esc-101',
+        status: 'locked',
+        statusLabel: 'Funds locked in escrow',
+        amount: 10200000,
+        statusNote: '50% release upon dispatch, 50% upon quality verification',
+      },
+    },
+  ]
+}
 
 export function getMockApiResponse<T>(path: string, opts: { method?: string; body?: unknown } = {}): T | undefined {
   // Normalize path without query params
@@ -749,7 +827,123 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
 
   // 10. Negotiations
   if (cleanPath === '/api/negotiations') {
-    return { negotiations: [] } as T
+    const savedNegsStr = localStorage.getItem('ecommind_negotiations')
+    if (savedNegsStr) {
+      try {
+        const parsed = JSON.parse(savedNegsStr)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return { negotiations: parsed } as T
+        }
+      } catch {}
+    }
+    const initial = getInitialNegotiations()
+    try { localStorage.setItem('ecommind_negotiations', JSON.stringify(initial)) } catch {}
+    return { negotiations: initial } as T
+  }
+
+  if (cleanPath.startsWith('/api/negotiations/') && cleanPath.endsWith('/counter')) {
+    const negId = cleanPath.replace('/api/negotiations/', '').replace('/counter', '')
+    const body = (opts.body as { unitPrice?: number }) || {}
+    const newPrice = body.unitPrice || 150000
+    const savedNegsStr = localStorage.getItem('ecommind_negotiations')
+    let parsed: ApiNegotiation[] = savedNegsStr ? JSON.parse(savedNegsStr) : getInitialNegotiations()
+    const n = parsed.find((x) => x.id === negId)
+    if (n) {
+      n.latestBuyerPrice = newPrice
+      n.rounds += 1
+      n.updatedAt = new Date().toISOString()
+      n.messages = n.messages || []
+      n.messages.push({
+        id: n.messages.length + 1,
+        sender: 'seller',
+        kind: 'counter',
+        unitPrice: newPrice,
+        text: `Counter-offer updated to ₹${(newPrice / 100).toLocaleString('en-IN')}/unit.`,
+        createdAt: new Date().toISOString(),
+      })
+      const supplierCounter = Math.round(newPrice * 1.02)
+      n.latestSupplierPrice = supplierCounter
+      n.messages.push({
+        id: n.messages.length + 1,
+        sender: 'supplier',
+        kind: 'offer',
+        unitPrice: supplierCounter,
+        text: `${n.supplierName.split('—')[0].trim()} countered: bulk price revised to ₹${(supplierCounter / 100).toLocaleString('en-IN')}/unit.`,
+        createdAt: new Date().toISOString(),
+      })
+      try { localStorage.setItem('ecommind_negotiations', JSON.stringify(parsed)) } catch {}
+      return n as T
+    }
+  }
+
+  if (cleanPath.startsWith('/api/negotiations/') && cleanPath.endsWith('/accept')) {
+    const negId = cleanPath.replace('/api/negotiations/', '').replace('/accept', '')
+    const savedNegsStr = localStorage.getItem('ecommind_negotiations')
+    let parsed: ApiNegotiation[] = savedNegsStr ? JSON.parse(savedNegsStr) : getInitialNegotiations()
+    const n = parsed.find((x) => x.id === negId)
+    if (n) {
+      const agreed = n.latestSupplierPrice || n.latestBuyerPrice || 160000
+      n.status = 'agreed'
+      n.statusLabel = 'Deal agreed'
+      n.agreedUnitPrice = agreed
+      n.updatedAt = new Date().toISOString()
+      n.messages = n.messages || []
+      n.messages.push({
+        id: n.messages.length + 1,
+        sender: 'ecommind',
+        kind: 'accept',
+        unitPrice: agreed,
+        text: `Deal accepted at ₹${(agreed / 100).toLocaleString('en-IN')}/unit. Escrow order initiated.`,
+        createdAt: new Date().toISOString(),
+      })
+      n.escrow = {
+        id: `esc_${Date.now()}`,
+        status: 'locked',
+        statusLabel: 'Funds locked in escrow',
+        amount: agreed * n.quantity,
+        statusNote: '50% release upon dispatch, 50% upon quality verification',
+      }
+      try { localStorage.setItem('ecommind_negotiations', JSON.stringify(parsed)) } catch {}
+      return n as T
+    }
+  }
+
+  if (cleanPath.startsWith('/api/negotiations/') && cleanPath.endsWith('/cancel')) {
+    const negId = cleanPath.replace('/api/negotiations/', '').replace('/cancel', '')
+    const savedNegsStr = localStorage.getItem('ecommind_negotiations')
+    let parsed: ApiNegotiation[] = savedNegsStr ? JSON.parse(savedNegsStr) : getInitialNegotiations()
+    const n = parsed.find((x) => x.id === negId)
+    if (n) {
+      n.status = 'cancelled'
+      n.statusLabel = 'Cancelled'
+      n.updatedAt = new Date().toISOString()
+      n.messages = n.messages || []
+      n.messages.push({
+        id: n.messages.length + 1,
+        sender: 'seller',
+        kind: 'decline',
+        unitPrice: null,
+        text: 'Negotiation cancelled by buyer.',
+        createdAt: new Date().toISOString(),
+      })
+      try { localStorage.setItem('ecommind_negotiations', JSON.stringify(parsed)) } catch {}
+      return n as T
+    }
+  }
+
+  if (cleanPath.startsWith('/api/negotiations/')) {
+    const negId = cleanPath.replace('/api/negotiations/', '')
+    const savedNegsStr = localStorage.getItem('ecommind_negotiations')
+    if (savedNegsStr) {
+      try {
+        const parsed: ApiNegotiation[] = JSON.parse(savedNegsStr)
+        const found = parsed.find((x) => x.id === negId)
+        if (found) return found as T
+      } catch {}
+    }
+    const initial = getInitialNegotiations()
+    const found = initial.find((x) => x.id === negId) || initial[0]
+    return found as T
   }
 
   if (cleanPath === '/api/business/profile') {
@@ -843,6 +1037,107 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
 
   // 12. RFQs & Product Intelligence
   if (cleanPath === '/api/rfqs') {
+    if (opts.body) {
+      const b = opts.body as {
+        supplierId?: string
+        sku?: string
+        quantity?: number
+        targetUnitPrice?: number | null
+        deliveryLocation?: string
+        deliveryDays?: number
+      }
+      const rfqId = `rfq_${Date.now()}`
+      const negId = `neg_${Date.now()}`
+
+      // Find supplier name
+      let sName = 'BharatSource'
+      const customSuppliers = localStorage.getItem('ecommind_supplier_quotes')
+      if (customSuppliers) {
+        try {
+          const list = JSON.parse(customSuppliers)
+          const found = list.find((x: any, idx: number) => `sup-${idx + 1}` === b.supplierId || x.supplier === b.supplierId)
+          if (found?.supplier) sName = found.supplier
+        } catch {}
+      }
+      if (sName === 'BharatSource' && b.supplierId) {
+        const supMatch = SUPPLIERS.find((s) => s.id === b.supplierId)
+        if (supMatch) sName = supMatch.name
+      }
+
+      // Find product name
+      const prods = getUserProducts()
+      const prodMatch = prods.find((p) => p.sku === b.sku)
+      const pName = prodMatch?.name || (b.sku ? `Product ${b.sku}` : 'Catalog Item')
+
+      const target = b.targetUnitPrice || 165000
+      const quotePrice = Math.round(target * 1.03)
+
+      const rfq: ApiRFQ = {
+        id: rfqId,
+        supplierId: b.supplierId || 'sup-1',
+        supplierName: sName,
+        sku: b.sku || 'SKU0001',
+        productName: pName,
+        quantity: b.quantity || 10,
+        targetUnitPrice: b.targetUnitPrice ?? null,
+        deliveryLocation: b.deliveryLocation || 'Mumbai, Maharashtra',
+        deliveryDays: b.deliveryDays || 5,
+        status: 'sent',
+        statusLabel: 'Quotation requested',
+        createdAt: new Date().toISOString(),
+      }
+
+      const messages: ApiNegotiationMessage[] = [
+        {
+          id: 1,
+          sender: 'ecommind',
+          kind: 'rfq',
+          unitPrice: b.targetUnitPrice ?? null,
+          text: `RFQ issued for ${b.quantity} units of ${pName}. Target price: ${b.targetUnitPrice ? `₹${(b.targetUnitPrice / 100).toLocaleString('en-IN')}/unit` : 'Supplier catalogue rate'}. Requested delivery in ${b.deliveryDays || 5} days to ${b.deliveryLocation || 'Mumbai'}.`,
+          createdAt: new Date(Date.now() - 10000).toISOString(),
+        },
+        {
+          id: 2,
+          sender: 'supplier',
+          kind: 'offer',
+          unitPrice: quotePrice,
+          text: `Offer received from ${sName.split('—')[0].trim()} agent: ₹${(quotePrice / 100).toLocaleString('en-IN')}/unit with dispatch commitment in ${b.deliveryDays || 5} days.`,
+          createdAt: new Date().toISOString(),
+        },
+      ]
+
+      const negotiation: ApiNegotiation = {
+        id: negId,
+        rfqId,
+        supplierId: b.supplierId || 'sup-1',
+        supplierName: sName,
+        sku: b.sku || 'SKU0001',
+        productName: pName,
+        quantity: b.quantity || 10,
+        status: 'negotiation_in_progress',
+        statusLabel: 'Negotiation in progress',
+        latestSupplierPrice: quotePrice,
+        latestBuyerPrice: b.targetUnitPrice ?? target,
+        agreedUnitPrice: null,
+        supplierDeliveryDays: b.deliveryDays || 5,
+        rounds: 2,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        rfq,
+        messages,
+        escrow: null,
+      }
+
+      try {
+        const existing = localStorage.getItem('ecommind_negotiations')
+        const list: ApiNegotiation[] = existing ? JSON.parse(existing) : getInitialNegotiations()
+        list.unshift(negotiation)
+        localStorage.setItem('ecommind_negotiations', JSON.stringify(list))
+      } catch {}
+
+      return { rfq, negotiation } as T
+    }
+
     return { rfqs: [] } as T
   }
 
