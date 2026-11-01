@@ -153,6 +153,27 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
     return { success: true } as T
   }
 
+  if (cleanPath === '/api/agent/status') {
+    if (opts.method === 'PUT' || (opts.body && opts.method !== 'GET')) {
+      const b = (opts.body as { status?: string }) || {}
+      const st = (b.status as 'active' | 'paused') || 'active'
+      const sessionStr = localStorage.getItem('ecommind_session')
+      if (sessionStr) {
+        try {
+          const session = JSON.parse(sessionStr)
+          if (session.business) {
+            session.business.agentStatus = st
+            localStorage.setItem('ecommind_session', JSON.stringify(session))
+          }
+        } catch {
+          // ignore
+        }
+      }
+      return { status: st, success: true } as T
+    }
+    return { status: 'active' } as T
+  }
+
   // 2. Catalog & Products
   if (cleanPath === '/api/products') {
     if (opts.method === 'POST' || (opts.body && opts.method !== 'GET')) {
@@ -193,13 +214,29 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
     const totalStock = products.reduce((sum, p) => sum + p.stock, 0)
     const inventoryValuation = products.reduce((sum, p) => sum + p.stock * p.cost, 0)
     return {
+      days: 30,
       revenue: Math.max(148240000, inventoryValuation * 2),
-      profit: Math.round(Math.max(148240000, inventoryValuation * 2) * 0.32),
-      margin: 34.2,
       orders: Math.max(1420, totalStock * 3),
-      ordersTrend: 12.4,
-      revenueTrend: 18.2,
+      units: Math.max(1850, totalStock * 4),
+      profit: Math.round(Math.max(148240000, inventoryValuation * 2) * 0.32),
       avgOrderValue: 104400,
+      grossMarginPct: 34.2,
+      deltas: {
+        revenue: 14.8,
+        orders: 12.4,
+        units: 11.2,
+        profit: 18.5,
+      },
+      productCount: products.length || 5,
+      needsAttention: products.filter((p) => p.stock < 15).length,
+      inventoryValue: inventoryValuation || 2500000,
+      activeAgents: 3,
+      agentsDiscovered: 7,
+      walletBalance: 5000000,
+      budget: {
+        daily: 5000000,
+        consumedToday: 840000,
+      },
       returnLosses: 3420000,
       supplierSavings: 6840000,
     } as T
@@ -217,6 +254,46 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
         revenue: rev * 100,
         profit: Math.round(rev * 0.34) * 100,
         orders: Math.floor(rev / 1100),
+      })
+    }
+    return { series } as T
+  }
+
+  if (cleanPath === '/api/analytics/products') {
+    const prods = getUserProducts()
+    const productSales = prods.map((p) => {
+      const units = Math.max(12, Math.round(p.avgDailySales * 30))
+      const revenue = units * p.price
+      const profit = units * (p.price - p.cost)
+      return {
+        sku: p.sku,
+        name: p.name,
+        category: p.category,
+        icon: p.icon,
+        units,
+        orders: Math.round(units * 0.82),
+        revenue,
+        profit,
+        marginPct: p.marginPct,
+      }
+    })
+    const catMap = new Map<string, number>()
+    for (const ps of productSales) {
+      catMap.set(ps.category, (catMap.get(ps.category) || 0) + ps.revenue)
+    }
+    const categories = Array.from(catMap.entries()).map(([name, revenue]) => ({ name, revenue }))
+    return { products: productSales, categories } as T
+  }
+
+  if (cleanPath === '/api/analytics/wallet-daily') {
+    const series = []
+    const now = Date.now()
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now - i * 86400000)
+      const dateStr = d.toISOString().split('T')[0]
+      series.push({
+        date: dateStr,
+        amount: Math.round((480 + Math.sin(i) * 110) * 100),
       })
     }
     return { series } as T
@@ -386,6 +463,19 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
     } as T
   }
 
+  if (cleanPath === '/api/activity/executions') {
+    return {
+      items: [
+        { id: 1, time: new Date().toISOString(), agent: 'Supplier Discovery Agent', function: 'discover_quotes', durationMs: 420, cost: 25, status: 'success' },
+        { id: 2, time: new Date(Date.now() - 3600000).toISOString(), agent: 'Price Optimiser Agent', function: 'reprice_listing', durationMs: 180, cost: 15, status: 'success' },
+        { id: 3, time: new Date(Date.now() - 7200000).toISOString(), agent: 'Escrow Settlement Agent', function: 'verify_milestone', durationMs: 310, cost: 20, status: 'success' },
+      ],
+      total: 3,
+      page: 1,
+      pageSize: 20,
+    } as T
+  }
+
   if (cleanPath === '/api/activity/reports') {
     return {
       reports: [
@@ -463,6 +553,42 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
     } as T
   }
 
+  if (cleanPath === '/api/listings') {
+    const prods = getUserProducts()
+    const listings = prods.flatMap((p, idx) => [
+      { id: `lst_amz_${p.sku}`, sku: p.sku, name: p.name, marketplace: 'Amazon India', status: 'Active', price: p.price, stock: p.stock },
+      { id: `lst_fk_${p.sku}`, sku: p.sku, name: p.name, marketplace: 'Flipkart', status: idx % 2 === 0 ? 'Active' : 'Draft', price: p.price, stock: p.stock },
+    ])
+    return { listings } as T
+  }
+
+  if (cleanPath === '/api/stock-movements') {
+    const prods = getUserProducts()
+    const movements = prods.slice(0, 8).map((p, i) => ({
+      id: `mov_${i + 1}`,
+      sku: p.sku,
+      productName: p.name,
+      type: i % 2 === 0 ? 'outflow' : 'inflow',
+      quantity: 12 + i * 4,
+      channel: 'Amazon India',
+      timestamp: new Date(Date.now() - i * 3600000 * 5).toISOString(),
+      balanceAfter: p.stock,
+    }))
+    return { movements } as T
+  }
+
+  if (cleanPath === '/api/approvals') {
+    return { approvals: [], pendingCount: 0 } as T
+  }
+
+  if (cleanPath.startsWith('/api/approvals/') && cleanPath.endsWith('/approve')) {
+    return { success: true } as T
+  }
+
+  if (cleanPath.startsWith('/api/approvals/') && cleanPath.endsWith('/reject')) {
+    return { success: true } as T
+  }
+
   // 7. Wallet
   if (cleanPath === '/api/wallet') {
     return {
@@ -471,6 +597,12 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
       currency: 'INR',
       dailyConsumed: 840000,
     } as T
+  }
+
+  if (cleanPath === '/api/wallet/topups') {
+    const body = (opts.body as { amount?: number }) || {}
+    const amount = body.amount || 500000
+    return { success: true, balance: 10000000, added: amount } as T
   }
 
   // 8. Suppliers & Service Agents
@@ -610,6 +742,48 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
         { key: 'mandate', label: 'Seller mandate', required: ['daily_budget', 'max_order_value', 'max_per_call_cost'], optional: [] },
       ],
     } as T
+  }
+
+  // 11. Google Places & Autocomplete
+  if (cleanPath === '/api/places/config') {
+    return { enabled: false, verificationRequired: false } as T
+  }
+
+  if (cleanPath === '/api/places/autocomplete') {
+    return { suggestions: [] } as T
+  }
+
+  if (cleanPath.startsWith('/api/places/details')) {
+    return {
+      formattedAddress: 'Mumbai, Maharashtra, India',
+      city: 'Mumbai',
+      state: 'Maharashtra',
+      country: 'India',
+      pincode: '400001',
+      verified: true,
+    } as T
+  }
+
+  // 12. RFQs & Product Intelligence
+  if (cleanPath === '/api/rfqs') {
+    return { rfqs: [] } as T
+  }
+
+  if (cleanPath.startsWith('/api/products/') && cleanPath.endsWith('/intelligence')) {
+    return {
+      supplierCount: 3,
+      bestPrice: 85000,
+      leadTimeDays: 2,
+      recommendation: 'Optimal supplier locked.',
+    } as T
+  }
+
+  if (cleanPath === '/api/products/prices' || (cleanPath.startsWith('/api/products/') && cleanPath.endsWith('/price'))) {
+    return { success: true } as T
+  }
+
+  if (cleanPath.startsWith('/api/service-agents/') && cleanPath.endsWith('/calls')) {
+    return { success: true } as T
   }
 
   return undefined

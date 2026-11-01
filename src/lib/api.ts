@@ -87,6 +87,10 @@ export async function api<T>(path: string, opts: RequestOpts = {}): Promise<T> {
     if (fallback !== undefined) return fallback
   }
 
+  if (isHtml || isInvalidApiData) {
+    throw new ApiError(res.status || 500, 'invalid_response', 'The server returned an invalid response.')
+  }
+
   if (!res.ok) {
     // Session ended elsewhere (expired, logged out in another tab): tell the app.
     if (res.status === 401 && !path.startsWith('/api/auth/') && !path.startsWith('/api/places/')) window.dispatchEvent(new Event('ecommind:unauthorized'))

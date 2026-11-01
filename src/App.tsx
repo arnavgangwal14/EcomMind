@@ -11,6 +11,7 @@ import Onboarding from '@/pages/auth/Onboarding'
 import Overview from '@/pages/Overview'
 import LandingPage from '@/pages/LandingPage'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 
 const Inventory = lazy(() => import('@/pages/Inventory'))
 const Analytics = lazy(() => import('@/pages/Analytics'))
@@ -115,7 +116,9 @@ export default function App() {
     <ThemeProvider>
       <DataProvider>
         <AppProvider>
-          <AppRoutes />
+          <ErrorBoundary>
+            <AppRoutes />
+          </ErrorBoundary>
         </AppProvider>
       </DataProvider>
     </ThemeProvider>

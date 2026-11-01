@@ -48,7 +48,7 @@ export default function Analytics() {
   const totalRevenue = cats.reduce((a, c) => a + c.revenue, 0)
   const best = ps.slice(0, 3)
   const worst = ps.length > 3 ? [...ps].slice(-2).reverse() : []
-  const rev = signedDelta(s?.deltas.revenue), ord = signedDelta(s?.deltas.orders), units = signedDelta(s?.deltas.units), prof = signedDelta(s?.deltas.profit)
+  const rev = signedDelta(s?.deltas?.revenue), ord = signedDelta(s?.deltas?.orders), units = signedDelta(s?.deltas?.units), prof = signedDelta(s?.deltas?.profit)
 
   const chartBody = (q: { loading: boolean; error?: { message: string }; reload: () => void }, empty: boolean, node: React.ReactNode, emptyText = 'No sales in this period.') =>
     q.loading ? <ChartSkeleton /> : q.error ? <PanelError message={q.error.message} onRetry={q.reload} /> : empty ? <ChartEmpty text={emptyText} /> : node

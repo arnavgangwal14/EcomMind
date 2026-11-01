@@ -63,13 +63,13 @@ export default function Overview() {
 
   const s = summary.data
   const loading = summary.loading
-  const rev = signedDelta(s?.deltas.revenue)
-  const ord = signedDelta(s?.deltas.orders)
-  const prof = signedDelta(s?.deltas.profit)
+  const rev = signedDelta(s?.deltas?.revenue)
+  const ord = signedDelta(s?.deltas?.orders)
+  const prof = signedDelta(s?.deltas?.profit)
   const chartData = (daily.data?.series ?? []).map((d) => ({ ...d, label: shortDate(d.date), revenueRs: d.revenue / 100 }))
   const stockData = (inventory.data?.products ?? []).map((p) => ({ ...p, short: p.name.replace('Insulated ', '').replace('Wireless ', '') }))
-  const daily_ = mandate.data?.mandate.dailyBudget ?? s?.budget.daily ?? 0
-  const consumed = s?.budget.consumedToday ?? 0
+  const daily_ = mandate.data?.mandate?.dailyBudget ?? s?.budget?.daily ?? 0
+  const consumed = s?.budget?.consumedToday ?? 0
 
   return (
     <div className="space-y-8">
