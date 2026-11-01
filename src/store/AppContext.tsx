@@ -160,9 +160,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let alive = true
     api<{ authenticated: boolean } & Partial<MeResponse>>('/api/auth/session')
-      .then((s) => { if (alive) setMeState(s.authenticated ? (s as MeResponse) : null) })
+      .then((s) => {
+        if (alive) {
+          if (s.authenticated) {
+            setMeState(s as MeResponse)
+            localStorage.setItem('ecommind_session', JSON.stringify(s))
+          } else {
+            const saved = localStorage.getItem('ecommind_session')
+            if (saved) {
+              try { setMeState(JSON.parse(saved)) } catch { setMeState(null) }
+            } else {
+              setMeState(null)
+            }
+          }
+        }
+      })
       .catch(() => {
-        toast.error('Can’t reach the EcomMind server', { description: 'Start the backend (see backend/README.md) and reload.' })
+        const saved = localStorage.getItem('ecommind_session')
+        if (saved && alive) {
+          try {
+            setMeState(JSON.parse(saved))
+            return
+          } catch { /* ignore */ }
+        }
       })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
@@ -193,6 +213,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try { await api('/api/auth/logout', { method: 'POST' }) } catch { /* session may already be gone */ }
+    localStorage.removeItem('ecommind_session')
     data.clear()
     setMeState(null)
     setImportedDatasets([])

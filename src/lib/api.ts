@@ -6,6 +6,8 @@
  * Errors come back as {error: {code, message, field?}} and are thrown as ApiError.
  */
 
+import { getMockApiResponse } from './mockApi'
+
 export class ApiError extends Error {
   status: number
   code: string
@@ -51,9 +53,12 @@ export async function api<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json'
   if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey
 
+  const apiBase = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || ''
+  const fullUrl = apiBase ? `${apiBase.replace(/\/$/, '')}${path}` : path
+
   let res: Response
   try {
-    res = await fetch(withQuery(path, opts.query), {
+    res = await fetch(withQuery(fullUrl, opts.query), {
       method: opts.method ?? (opts.body !== undefined ? 'POST' : 'GET'),
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
@@ -62,6 +67,9 @@ export async function api<T>(path: string, opts: RequestOpts = {}): Promise<T> {
     })
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e
+    // If backend is unreachable or offline, use client-side mock fallback
+    const fallback = getMockApiResponse<T>(path, opts)
+    if (fallback !== undefined) return fallback
     throw new ApiError(0, 'network_error', 'Can’t reach the EcomMind server. Check that the backend is running and try again.')
   }
 
@@ -71,6 +79,16 @@ export async function api<T>(path: string, opts: RequestOpts = {}): Promise<T> {
   try { data = text ? JSON.parse(text) : undefined } catch { /* non-JSON body */ }
 
   if (!res.ok) {
+    // If static hosting returns 404, 405 Method Not Allowed, or HTML error page on API route
+    if (
+      res.status === 404 ||
+      res.status === 405 ||
+      (typeof text === 'string' && (text.includes('<!DOCTYPE html>') || text.includes('<html')))
+    ) {
+      const fallback = getMockApiResponse<T>(path, opts)
+      if (fallback !== undefined) return fallback
+    }
+
     // Session ended elsewhere (expired, logged out in another tab): tell the app.
     if (res.status === 401 && !path.startsWith('/api/auth/') && !path.startsWith('/api/places/')) window.dispatchEvent(new Event('ecommind:unauthorized'))
     const d = data as { error?: { code?: string; message?: string; field?: string; details?: unknown }; detail?: string } | undefined
