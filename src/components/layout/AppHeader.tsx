@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import {
   Bell, Calendar, ChevronDown, Menu, Play, Search, Store, Sparkles,
+  LogOut, Settings as SettingsIcon, Upload, Activity as ActivityIcon,
 } from 'lucide-react'
 import { useApp } from '@/store/AppContext'
 import { cx, timeAgo, todayLabel } from '@/lib/format'
@@ -37,7 +38,7 @@ const SEARCH_PAGES = [
 ]
 
 export function AppHeader() {
-  const { agentStatus, demoLoaded, loadDemoBusiness, notifications, markNotificationsRead, auth } = useApp()
+  const { agentStatus, demoLoaded, loadDemoBusiness, notifications, markNotificationsRead, auth, logout } = useApp()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
@@ -239,10 +240,81 @@ export function AppHeader() {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* User avatar */}
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#7B2FE0] to-[#BF8FFF] text-xs font-bold text-white shadow-xs">
-        {(auth.sellerName || 'A').slice(0, 1).toUpperCase()}
-      </div>
+      {/* User profile avatar dropdown */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#7B2FE0] to-[#BF8FFF] text-xs font-bold text-white shadow-xs hover:ring-2 hover:ring-[#7B2FE0]/40 hover:opacity-90 transition-all cursor-pointer focus:outline-hidden"
+            aria-label="User profile menu"
+          >
+            {(auth.sellerName || 'A').slice(0, 1).toUpperCase()}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64 rounded-2xl border border-[#C9D6D3] dark:border-white/10 bg-white dark:bg-[#0E1511] p-2 shadow-2xl">
+          {/* User profile card matching left-most sidebar corner */}
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-[#F2F6F6] dark:bg-white/5 border border-[#C9D6D3]/40 dark:border-white/5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-[#7B2FE0] to-[#BF8FFF] text-sm font-bold text-white shadow-xs">
+              {(auth.sellerName || 'A').slice(0, 1).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-bold text-[#121A16] dark:text-white">
+                {auth.sellerName || 'Seller'}
+              </p>
+              <p className="truncate text-[11px] text-[#3B4640] dark:text-muted-foreground">
+                {auth.storeName || 'Store not configured'}
+              </p>
+              <div className="mt-1 flex items-center gap-2">
+                <span className="rounded-full bg-[#DCEDEA] dark:bg-white/10 px-1.5 py-0.5 text-[9.5px] font-bold text-[#121A16] dark:text-white">
+                  {auth.plan || 'Growth Plan'}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#14B8A0]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#14B8A0]" />
+                  {agentStatus === 'active' ? 'Live' : 'Idle'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <DropdownMenuSeparator className="my-1.5 bg-[#C9D6D3]/50 dark:bg-white/10" />
+
+          <DropdownMenuItem
+            onClick={() => navigate('/settings')}
+            className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold cursor-pointer rounded-lg hover:bg-[#DCEDEA]/50 dark:hover:bg-white/5"
+          >
+            <SettingsIcon className="h-4 w-4 text-[#7B2FE0] dark:text-[#BF8FFF]" />
+            <span>Store & Mandate Settings</span>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            onClick={() => navigate('/import')}
+            className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold cursor-pointer rounded-lg hover:bg-[#DCEDEA]/50 dark:hover:bg-white/5"
+          >
+            <Upload className="h-4 w-4 text-[#14B8A0]" />
+            <span>Import Business Data</span>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            onClick={() => navigate('/activity')}
+            className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold cursor-pointer rounded-lg hover:bg-[#DCEDEA]/50 dark:hover:bg-white/5"
+          >
+            <ActivityIcon className="h-4 w-4 text-[#FF9A3D]" />
+            <span>Agent Activity Telemetry</span>
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator className="my-1.5 bg-[#C9D6D3]/50 dark:bg-white/10" />
+
+          <DropdownMenuItem
+            onClick={async () => {
+              await logout()
+              navigate('/login')
+            }}
+            className="flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400 cursor-pointer rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30"
+          >
+            <LogOut className="h-4 w-4" />
+            <span>Log out</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </header>
   )
 }

@@ -671,23 +671,39 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
     const custom = localStorage.getItem('ecommind_supplier_quotes')
     if (custom) {
       try {
-        const quotes = JSON.parse(custom)
-        if (Array.isArray(quotes) && quotes.length > 0) {
+        const quotesList = JSON.parse(custom)
+        if (Array.isArray(quotesList) && quotesList.length > 0) {
           const map = new Map<string, any>()
-          for (let i = 0; i < quotes.length; i++) {
-            const q = quotes[i]
+          for (let i = 0; i < quotesList.length; i++) {
+            const q = quotesList[i]
             const sName = q.supplier || 'Vendor Partner'
             if (!map.has(sName)) {
               map.set(sName, {
-                id: `sup-${i + 1}`,
+                id: `sup-${map.size + 1}`,
                 name: sName,
-                category: 'Wholesale & Components',
+                agentId: `agent-sup-${map.size + 1}`,
+                location: 'Mumbai, Maharashtra',
                 rating: 4.8,
+                reviews: 24,
                 verified: true,
-                pincode: '400001',
-                activeContracts: 1,
+                autoRespond: true,
+                catalogue: [],
+                quotes: [],
               })
             }
+            const s = map.get(sName)
+            const sku = q.sku || 'PROD-001'
+            if (!s.catalogue.includes(sku)) s.catalogue.push(sku)
+            s.quotes.push({
+              id: `q-${i + 1}`,
+              supplierId: s.id,
+              sku,
+              unitPrice: q.unitPrice || 45000,
+              deliveryDays: q.deliveryDays || 3,
+              moq: q.moq || 50,
+              available: q.availableQty || q.available || 500,
+              validTill: new Date(Date.now() + 30 * 86400000).toISOString(),
+            })
           }
           return { suppliers: Array.from(map.values()) } as T
         }

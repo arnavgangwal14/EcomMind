@@ -58,7 +58,7 @@ export default function SupplierMarketplace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, suppliers.length, products.length])
 
-  const quotes = useMemo(() => suppliers.flatMap((s) => s.quotes.map((q) => ({ q, s }))).filter(({ q }) => {
+  const quotes = useMemo(() => suppliers.flatMap((s) => (s.quotes ?? []).map((q) => ({ q, s }))).filter(({ q }) => {
     if (skuFilter !== 'All' && q.sku !== skuFilter) return false
     if (maxPrice && q.unitPrice > Number(maxPrice) * 100) return false
     if (maxDays && q.deliveryDays > Number(maxDays)) return false
@@ -75,7 +75,7 @@ export default function SupplierMarketplace() {
   }
 
   const draftSupplier = draft ? suppliers.find((s) => s.id === draft.supplierId) : undefined
-  const draftQuote = draft && draftSupplier ? draftSupplier.quotes.find((q) => q.sku === draft.sku) : undefined
+  const draftQuote = draft && draftSupplier ? (draftSupplier.quotes ?? []).find((q) => q.sku === draft.sku) : undefined
   const draftErrors = draft ? {
     sku: !draft.sku ? 'Choose a product.' : !products.some((p) => p.sku === draft.sku) ? 'This product isn’t in your catalogue.' : undefined,
     quantity: !(Number(draft.quantity) >= 1 && Number.isInteger(Number(draft.quantity))) ? 'Enter a whole number of units.' : undefined,
@@ -158,7 +158,7 @@ export default function SupplierMarketplace() {
       <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         {suppliersQ.loading && Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-72 rounded-xl" />)}
         {suppliers.map((s) => {
-          const headline = [...s.quotes].sort((a, b) => a.unitPrice - b.unitPrice)[0]
+          const headline = [...(s.quotes ?? [])].sort((a, b) => a.unitPrice - b.unitPrice)[0]
           return (
             <Card key={s.id} className="card-surface card-hover">
               <CardContent className="p-5">
@@ -185,7 +185,7 @@ export default function SupplierMarketplace() {
                 <div className="mt-3">
                   <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Catalogue · available stock</p>
                   <div className="space-y-1">
-                    {s.quotes.map((q) => (
+                    {(s.quotes ?? []).map((q) => (
                       <div key={q.id} className="flex items-center justify-between text-xs">
                         <span className="text-muted-foreground">{productName(q.sku)}</span>
                         <span className="tabular">{formatNum(q.available)} units · {formatPaise(q.unitPrice)}</span>
@@ -222,7 +222,7 @@ export default function SupplierMarketplace() {
               return (
                 <TableRow key={q.id} className="border-border">
                   <TableCell className="whitespace-nowrap font-medium">
-                    <span className="flex items-center gap-1.5">{s.name.split('—')[0].trim()}{s.verified && <BadgeCheck className="h-3.5 w-3.5 text-success" aria-hidden />}</span>
+                    <span className="flex items-center gap-1.5">{(s.name || '').split('—')[0].trim()}{s.verified && <BadgeCheck className="h-3.5 w-3.5 text-success" aria-hidden />}</span>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-muted-foreground">{productName(q.sku)}</TableCell>
                   <TableCell className={cx('tabular font-semibold', best && 'text-success')}>{formatPaise(q.unitPrice)}{best && <span className="ml-1 text-[10px] font-medium">best</span>}</TableCell>
@@ -230,7 +230,7 @@ export default function SupplierMarketplace() {
                   <TableCell className="tabular">{formatNum(q.available)}</TableCell>
                   <TableCell className="tabular">{q.deliveryDays} days</TableCell>
                   <TableCell className="tabular">★ {s.rating}</TableCell>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">{new Date(q.validTill).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</TableCell>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">{q.validTill ? new Date(q.validTill).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '30 days'}</TableCell>
                   <TableCell>
                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openRfq(s.id, q.sku)} disabled={!products.some((p) => p.sku === q.sku)}>Request quotation</Button>
                   </TableCell>
