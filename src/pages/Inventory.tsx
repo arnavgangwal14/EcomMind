@@ -245,9 +245,9 @@ function ProductDrawer({ product, onClose }: { product: Product | null; onClose:
   const cov = product.coverageDays ?? '—'
   const f = intel.data?.forecast
   const data = (f?.series ?? []).map((d) => ({ ...d, label: shortDate(d.date) }))
-  const competitors = intel.data?.pricing.competitors ?? []
-  const quotes = (suppliers.data?.suppliers ?? []).flatMap((s) => s.quotes.filter((q) => q.sku === product.sku).map((q) => ({ q, s })))
-    .sort((a, b) => a.q.unitPrice - b.q.unitPrice)
+  const competitors = intel.data?.pricing?.competitors ?? []
+  const quotes = (suppliers.data?.suppliers ?? []).flatMap((s) => (s.quotes ?? []).filter((q) => q.sku === product.sku).map((q) => ({ q, s })))
+    .sort((a, b) => (a.q?.unitPrice ?? 0) - (b.q?.unitPrice ?? 0))
 
   return (
     <Sheet open={!!product} onOpenChange={(o) => !o && onClose()}>

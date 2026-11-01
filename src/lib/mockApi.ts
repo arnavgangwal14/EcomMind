@@ -353,6 +353,13 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
   }
 
   if (cleanPath === '/api/analytics/returns') {
+    const prods = getUserProducts()
+    const byProduct = prods.map((p) => ({
+      sku: p.sku,
+      name: p.name,
+      returnRate: p.returnRate ?? 0.05,
+    }))
+
     const custom = localStorage.getItem('ecommind_returns')
     if (custom) {
       try {
@@ -360,32 +367,48 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
         if (Array.isArray(list) && list.length > 0) {
           const totalOrders = list.reduce((s, r) => s + (r.orders || 0), 0)
           const totalReturns = list.reduce((s, r) => s + (r.returns || 0), 0)
-          return {
-            pincodes: list.map((r) => ({
+          const pincodes = list.map((r) => {
+            const pProd = prods.find((p) => p.sku === r.sku)
+            return {
               pincode: r.pincode,
               city: r.city || 'Urban Area',
+              sku: r.sku,
+              productName: pProd?.name || r.sku,
               orders: r.orders || 0,
               returns: r.returns || 0,
               returnRate: r.orders ? Math.round((r.returns / r.orders) * 1000) / 1000 : 0.05,
               risk: (r.returns / (r.orders || 1)) > 0.25 ? 'High' : (r.returns / (r.orders || 1)) > 0.1 ? 'Medium' : 'Low',
-            })),
+            }
+          })
+          const highRisk = pincodes.filter((p) => p.returnRate >= 0.2)
+          const ovr = totalOrders ? Math.round((totalReturns / totalOrders) * 1000) / 1000 : 0.08
+          return {
+            overallReturnRate: ovr,
+            returnRate: ovr,
             totalReturns,
-            returnRate: totalOrders ? Math.round((totalReturns / totalOrders) * 1000) / 1000 : 0.08,
+            pincodes,
+            highRisk,
+            byProduct,
           } as T
         }
       } catch {
         // ignore
       }
     }
+    const defaultPincodes = [
+      { pincode: '110006', city: 'Delhi', sku: 'PHN-003', productName: 'Wireless Fast Charger Stand', orders: 120, returns: 45, returnRate: 0.38, risk: 'High' },
+      { pincode: '700001', city: 'Kolkata', sku: 'EAR-001', productName: 'Noise-Cancelling Earbuds Pro', orders: 85, returns: 28, returnRate: 0.33, risk: 'High' },
+      { pincode: '400001', city: 'Mumbai', sku: 'WAT-002', productName: 'Smart Fitness Tracker Watch', orders: 340, returns: 14, returnRate: 0.04, risk: 'Low' },
+      { pincode: '560001', city: 'Bengaluru', sku: 'LED-005', productName: 'Adjustable LED Desk Lamp', orders: 290, returns: 11, returnRate: 0.038, risk: 'Low' },
+    ]
+    const highRisk = defaultPincodes.filter((p) => p.returnRate >= 0.2)
     return {
-      pincodes: [
-        { pincode: '110006', city: 'Delhi', orders: 120, returns: 45, returnRate: 0.38, risk: 'High' },
-        { pincode: '700001', city: 'Kolkata', orders: 85, returns: 28, returnRate: 0.33, risk: 'High' },
-        { pincode: '400001', city: 'Mumbai', orders: 340, returns: 14, returnRate: 0.04, risk: 'Low' },
-        { pincode: '560001', city: 'Bengaluru', orders: 290, returns: 11, returnRate: 0.038, risk: 'Low' },
-      ],
-      totalReturns: 142,
+      overallReturnRate: 0.082,
       returnRate: 0.082,
+      totalReturns: 142,
+      pincodes: defaultPincodes,
+      highRisk,
+      byProduct,
     } as T
   }
 
@@ -770,9 +793,73 @@ export function getMockApiResponse<T>(path: string, opts: { method?: string; bod
   }
 
   if (cleanPath.startsWith('/api/products/') && cleanPath.endsWith('/intelligence')) {
+    const rawSku = cleanPath.replace('/api/products/', '').replace('/intelligence', '')
+    const targetSku = decodeURIComponent(rawSku).toUpperCase()
+    const prods = getUserProducts()
+    const product = prods.find((p) => p.sku.toUpperCase() === targetSku) || prods[0] || {
+      sku: 'EAR-001',
+      name: 'Noise-Cancelling Earbuds Pro',
+      price: 145000,
+      cost: 72000,
+      stock: 35,
+      avgDailySales: 4.2,
+      category: 'Audio',
+      marginPct: 50.3,
+      icon: 'headphones',
+    }
+
+    const now = Date.now()
+    const series = []
+    // 14 days actual history
+    for (let i = 14; i >= 1; i--) {
+      const d = new Date(now - i * 86400000).toISOString().split('T')[0]
+      const actual = Math.max(1, Math.round(product.avgDailySales + Math.sin(i * 0.7) * 2))
+      series.push({ date: d, actual })
+    }
+    // 7 days predicted forecast
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now + i * 86400000).toISOString().split('T')[0]
+      const predicted = Math.max(1, Math.round((product.avgDailySales + Math.sin(i * 0.5) * 1.5) * 10) / 10)
+      series.push({ date: d, predicted })
+    }
+
+    const demand7 = Math.round(product.avgDailySales * 7)
+    const demand30 = Math.round(product.avgDailySales * 30)
+    const recommendedStock = Math.round(product.avgDailySales * 25)
+    const reorderQty = Math.max(0, recommendedStock - product.stock)
+
+    const basePrice = product.price || 145000
+    const competitors = [
+      { channel: 'Amazon India', price: Math.round(basePrice * 1.04) },
+      { channel: 'Flipkart', price: Math.round(basePrice * 0.98) },
+      { channel: 'Meesho', price: Math.round(basePrice * 1.02) },
+    ]
+    const lowestCompetitor = Math.min(...competitors.map((c) => c.price))
+    const suggestedPrice = Math.round(lowestCompetitor * 1.01)
+
     return {
+      product,
+      forecast: {
+        series,
+        demand7,
+        demand30,
+        recommendedStock,
+        reorderQty,
+        confidencePct: 92,
+        method: 'Seasonal-naive demand forecast with festival trend weighting',
+      },
+      pricing: {
+        competitors,
+        lowestCompetitor,
+        suggestedPrice,
+        marginNowPct: product.marginPct || 35.0,
+        marginAtSuggestedPct: Math.round(((suggestedPrice - product.cost) / suggestedPrice) * 1000) / 10,
+        marginFloor: Math.round(product.cost * 1.25),
+        limitedBy: null,
+        reason: 'Optimal buy-box competitive price 1% above Flipkart baseline.',
+      },
       supplierCount: 3,
-      bestPrice: 85000,
+      bestPrice: Math.round(product.cost * 0.92),
       leadTimeDays: 2,
       recommendation: 'Optimal supplier locked.',
     } as T

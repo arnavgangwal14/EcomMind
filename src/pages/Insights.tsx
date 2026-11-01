@@ -54,7 +54,7 @@ export default function Insights() {
   const pr = intel.data?.pricing
   const fc = (f?.series ?? []).map((d) => ({ ...d, label: shortDate(d.date) }))
   const risk = (returns.data?.byProduct ?? []).map((r) => ({ name: r.name, rate: r.returnRate * 100 }))
-  const recommended = logistics.data?.quotes.find((q) => q.id === logistics.data?.recommended)
+  const recommended = (logistics.data?.quotes ?? []).find((q) => q.id === logistics.data?.recommended)
 
   return (
     <div>
@@ -141,7 +141,7 @@ export default function Insights() {
                   <span className="text-sm font-medium text-brand-soft">Your price</span>
                   <span className="tabular text-sm font-bold">{product ? formatPaise(product.price) : '—'}</span>
                 </div>
-                {pr.competitors.map((c) => (
+                {(pr.competitors ?? []).map((c) => (
                   <div key={c.channel} className="flex items-center justify-between rounded-lg border border-border bg-secondary/40 px-3.5 py-2.5">
                     <span className="text-sm text-muted-foreground">{c.channel}</span>
                     <span className={cx('tabular text-sm font-medium', product && c.price < product.price && 'text-success')}>{formatPaise(c.price)}</span>
@@ -187,7 +187,7 @@ export default function Insights() {
                   </p>
                 </div>
               ))}
-              {returns.data && returns.data.highRisk.length > 0 && (
+              {(returns.data?.highRisk?.length ?? 0) > 0 && (
                 <p className="text-xs text-muted-foreground"><span className="font-medium text-foreground">Recommendation:</span> require prepaid or confirmation calls for orders to these pincodes.</p>
               )}
             </div>
